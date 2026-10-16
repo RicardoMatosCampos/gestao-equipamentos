@@ -12,19 +12,49 @@ def iniciar_conexao() -> Client:
 def inserir_requisicao(dados_requisicao: dict):
     """
     Recebe um dicionário com os dados do formulário e envia para o Supabase.
-    Retorna (True, mensagem_sucesso) ou (False, mensagem_erro).
+    Retorna (True, mensagem_sucesso, registro_criado) ou (False, mensagem_erro, None).
     """
     try:
         supabase = iniciar_conexao()
         resposta = supabase.table("requisicoes").insert(dados_requisicao).execute()
-        return True, "Requisição gravada com sucesso no Supabase!"
+        registro = resposta.data[0] if resposta.data else None
+        return True, "Requisição gravada com sucesso no Supabase!", registro
     except Exception as e:
         msg = str(e)
+        if "status" in msg:
+            return False, "A coluna 'status' ainda não foi criada no banco. Execute no DBeaver: ALTER TABLE requisicoes ADD COLUMN status TEXT DEFAULT '🟡 Pendente / Aguardando Peça';", None
         if "Invalid API key" in msg or "401" in msg:
-            return False, "Chave da API Supabase inválida. Verifique o secrets.toml."
+            return False, "Chave da API Supabase inválida. Verifique o secrets.toml.", None
         if "relation \"requisicoes\" does not exist" in msg:
-            return False, "A tabela 'requisicoes' não foi encontrada."
-        return False, f"Erro ao gravar no banco: {msg}"
+            return False, "A tabela 'requisicoes' não foi encontrada.", None
+        return False, f"Erro ao gravar no banco: {msg}", None
+
+def atualizar_status_requisicao(id_requisicao: int, novo_status: str):
+    """
+    Atualiza o status de uma requisição pelo seu ID no Supabase.
+    Retorna (True, mensagem) ou (False, erro).
+    """
+    try:
+        supabase = iniciar_conexao()
+        resposta = supabase.table("requisicoes").update({"status": novo_status}).eq("id", id_requisicao).execute()
+        return True, f"Status do chamado #{id_requisicao} atualizado com sucesso!"
+    except Exception as e:
+        msg = str(e)
+        if "status" in msg:
+            return False, "A coluna 'status' ainda não foi criada no banco. Execute no DBeaver: ALTER TABLE requisicoes ADD COLUMN status TEXT DEFAULT '🟡 Pendente / Aguardando Peça';"
+        return False, f"Erro ao atualizar status: {msg}"
+
+def buscar_requisicoes():
+    """
+    Busca todas as requisições gravadas no Supabase ordenadas pela mais recente.
+    Retorna (lista_de_requisicoes, erro).
+    """
+    try:
+        supabase = iniciar_conexao()
+        resposta = supabase.table("requisicoes").select("*").order("id", desc=True).execute()
+        return resposta.data, None
+    except Exception as e:
+        return [], str(e)
 
 def testar_conexao():
     """
