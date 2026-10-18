@@ -5,12 +5,26 @@ Aplicação Web desenvolvida com Streamlit e integrada ao Supabase para
 gestão de manutenções, chamados e controle de patrimônio em postos de saúde.
 """
 
+import base64
 from datetime import date, timedelta
-from typing import Dict, Any, List
+import hashlib
+import hmac
+import importlib
+import json
+import time
+from typing import Dict, Any, List, Optional
+import altair as alt
 import pandas as pd
 import streamlit as st
 
 import conexao_bd
+
+# Força o recarregamento do módulo conexao_bd para refletir novos métodos sem reiniciar o Streamlit
+try:
+    importlib.reload(conexao_bd)
+except Exception:
+    pass
+
 from constantes import (
     APP_TITLE,
     APP_ICON,
@@ -22,6 +36,7 @@ from constantes import (
     CATEGORIAS_EQUIPAMENTOS,
     ZONAS_OPERACIONAIS,
     EMPRESAS_LOTES,
+    ABAS_SISTEMA,
     MAPA_COLUNAS_RELATORIO
 )
 
@@ -67,14 +82,140 @@ def aplicar_estilos_customizados() -> None:
     )
 
 
+# ==============================================================================
+# UTILITÁRIOS DE SESSÃO E IDENTIFICAÇÃO (PERSISTÊNCIA & VINCULAÇÃO)
+# ==============================================================================
+
+def gerar_token_sessao(dados_usuario: Dict[str, Any]) -> str:
+    """
+    Gera um token criptográfico assinado com HMAC-SHA256 para persistência
+    de login entre recarregamentos de página (F5) e navegação mobile.
+    """
+    if hasattr(conexao_bd, "gerar_token_sessao"):
+        try:
+            tok = conexao_bd.gerar_token_sessao(dados_usuario)
+            if tok:
+                return tok
+        except Exception:
+            pass
+    try:
+        url = st.secrets.get("SUPABASE_URL", "").strip()
+        key = st.secrets.get("SUPABASE_KEY", "").strip()
+        secret = (key + url).encode("utf-8")
+        payload = {
+            "email": dados_usuario.get("email"),
+            "id": str(dados_usuario.get("id")),
+            "perfil": dados_usuario.get("perfil", "Técnico de TI"),
+            "is_admin": bool(dados_usuario.get("is_admin", False)),
+            "ts": int(time.time())
+        }
+        raw_bytes = json.dumps(payload).encode("utf-8")
+        b64_payload = base64.urlsafe_b64encode(raw_bytes).decode("utf-8")
+        sig = hmac.new(secret, b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        return f"{b64_payload}.{sig}"
+    except Exception:
+        return ""
+
+
+def validar_token_sessao(token: Optional[str]) -> Optional[Dict[str, Any]]:
+    """
+    Valida a autenticidade e validade (30 dias) do token de sessão.
+    Garante que o técnico continue conectado mesmo após recarregar a tela.
+    """
+    if not token or "." not in token:
+        return None
+    if hasattr(conexao_bd, "validar_token_sessao"):
+        try:
+            res = conexao_bd.validar_token_sessao(token)
+            if res:
+                return res
+        except Exception:
+            pass
+    try:
+        url = st.secrets.get("SUPABASE_URL", "").strip()
+        key = st.secrets.get("SUPABASE_KEY", "").strip()
+        secret = (key + url).encode("utf-8")
+        b64_payload, signature = token.strip().split(".", 1)
+        expected_sig = hmac.new(secret, b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected_sig):
+            return None
+        raw_bytes = base64.urlsafe_b64decode(b64_payload.encode("utf-8"))
+        payload = json.loads(raw_bytes.decode("utf-8"))
+        idade_segundos = time.time() - payload.get("ts", 0)
+        if idade_segundos > 30 * 24 * 3600 or idade_segundos < -60:
+            return None
+        return payload
+    except Exception:
+        return None
+
+
+def identificar_tecnico_por_email(email: Optional[str]) -> Optional[Dict[str, Any]]:
+    """
+    Identifica automaticamente o técnico cadastrado a partir do e-mail de login.
+    """
+    if not email:
+        return None
+    if hasattr(conexao_bd, "identificar_tecnico_por_email"):
+        try:
+            res = conexao_bd.identificar_tecnico_por_email(email)
+            if res:
+                return res
+        except Exception:
+            pass
+    try:
+        tecnicos, _ = conexao_bd.buscar_tecnicos()
+        if not tecnicos:
+            return None
+        email_completo = email.strip().lower()
+        email_clean = email_completo.split("@")[0]
+
+        # 1. Prioridade Máxima: correspondência exata pela coluna 'email'
+        for t in tecnicos:
+            if t.get("email") and str(t.get("email")).strip().lower() == email_completo:
+                return t
+
+        # 2. Correspondência pelo primeiro ou último nome
+        for t in tecnicos:
+            nome_completo = str(t.get("nome", "")).lower()
+            partes = nome_completo.split()
+            if partes and (partes[0] in email_clean or partes[-1] in email_clean):
+                return t
+        for t in tecnicos:
+            nome_completo = str(t.get("nome", "")).lower()
+            for p in nome_completo.split():
+                if len(p) >= 4 and p in email_clean:
+                    return t
+        return None
+    except Exception:
+        return None
+
+
 def inicializar_sessao() -> None:
-    """Garante que as variáveis de estado de sessão estejam inicializadas."""
+    """Garante que as variáveis de estado de sessão estejam inicializadas e restaura login persistente."""
     if "usuario_logado" not in st.session_state:
         st.session_state["usuario_logado"] = None
     if "usuario_email" not in st.session_state:
         st.session_state["usuario_email"] = None
+    if "usuario_perfil" not in st.session_state:
+        st.session_state["usuario_perfil"] = "Técnico de TI"
     if "is_admin" not in st.session_state:
         st.session_state["is_admin"] = False
+    if "aba_selecionada" not in st.session_state:
+        st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
+    if "tecnico_fixado" not in st.session_state:
+        st.session_state["tecnico_fixado"] = None
+
+    # Restauração automática de sessão persistente (o técnico não desloga no F5/recarregamento)
+    if not st.session_state["usuario_logado"]:
+        token_sessao = st.query_params.get("session_token")
+        if token_sessao:
+            dados_usuario = validar_token_sessao(token_sessao)
+            if dados_usuario:
+                st.session_state["usuario_logado"] = dados_usuario
+                st.session_state["usuario_email"] = dados_usuario.get("email")
+                st.session_state["usuario_perfil"] = dados_usuario.get("perfil", "Técnico de TI")
+                st.session_state["is_admin"] = dados_usuario.get("is_admin", False)
+                st.session_state["tecnico_fixado"] = identificar_tecnico_por_email(dados_usuario.get("email"))
 
 
 # ==============================================================================
@@ -82,7 +223,23 @@ def inicializar_sessao() -> None:
 # ==============================================================================
 
 def render_tela_login() -> None:
-    """Renderiza a interface de login protegida por Supabase Auth."""
+    """Renderiza a interface de login protegida por Supabase Auth com suporte a links de recuperação."""
+    st.markdown("""
+        <script>
+        if (window.location.hash && window.location.hash.includes('access_token')) {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            const at = params.get('access_token');
+            const rt = params.get('refresh_token');
+            const type = params.get('type');
+            if (at && !window.location.search.includes('access_token')) {
+                const newUrl = window.location.pathname + '?access_token=' + encodeURIComponent(at) + (rt ? '&refresh_token=' + encodeURIComponent(rt) : '') + (type ? '&auth_type=' + encodeURIComponent(type) : '');
+                window.location.href = newUrl;
+            }
+        }
+        </script>
+    """, unsafe_allow_html=True)
+
     _, col_login, _ = st.columns([1, 2, 1])
 
     with col_login:
@@ -97,10 +254,49 @@ def render_tela_login() -> None:
         )
         st.divider()
 
+        # Detecção de link de primeiro acesso ou redefinição de senha vindo do Supabase
+        access_token_param = st.query_params.get("access_token")
+        refresh_token_param = st.query_params.get("refresh_token", "")
+        if access_token_param:
+            st.info("🎉 Link de ativação do Supabase detectado! Cadastre sua senha de acesso abaixo:")
+            with st.form(key="form_definir_senha_link"):
+                st.subheader("🔑 Definir Nova Senha de Acesso")
+                st.caption("Cadastre sua senha pessoal para poder acessar o sistema a qualquer momento.")
+                nova_senha_1 = st.text_input("Nova Senha *", type="password", placeholder="Digite no mínimo 6 caracteres...")
+                nova_senha_2 = st.text_input("Confirme a Nova Senha *", type="password", placeholder="Repita a senha...")
+                btn_salvar_senha = st.form_submit_button("Salvar Senha e Entrar 🚀", use_container_width=True)
+
+                if btn_salvar_senha:
+                    if not nova_senha_1 or len(nova_senha_1) < 6:
+                        st.error("❌ A senha deve conter pelo menos 6 caracteres.")
+                    elif nova_senha_1 != nova_senha_2:
+                        st.error("❌ As senhas digitadas não conferem.")
+                    else:
+                        sucesso_pwd, msg_pwd = conexao_bd.redefinir_senha_com_token(access_token_param, refresh_token_param, nova_senha_1)
+                        if sucesso_pwd:
+                            st.success("✅ Senha configurada com sucesso! Você já pode acessar.")
+                            if "access_token" in st.query_params:
+                                del st.query_params["access_token"]
+                            if "refresh_token" in st.query_params:
+                                del st.query_params["refresh_token"]
+                            if "auth_type" in st.query_params:
+                                del st.query_params["auth_type"]
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg_pwd}")
+            st.divider()
+
         with st.form(key="form_login_principal"):
             st.subheader("🔐 Autenticação de Acesso")
             email_login = st.text_input("E-mail Corporativo (Lark / TI) *", placeholder="ex: seu.nome@empresa.com")
             senha_login = st.text_input("Senha de Acesso *", type="password", placeholder="Digite sua senha...")
+
+            destino_inicial = st.radio(
+                "🎯 Abrir diretamente em:",
+                options=["📊 Dashboard de Gráficos", "📝 Nova Requisição", "📋 Consultar Histórico"],
+                index=0,
+                horizontal=True
+            )
 
             st.write("")
             btn_entrar = st.form_submit_button("Acessar Sistema 🚀", use_container_width=True)
@@ -116,24 +312,100 @@ def render_tela_login() -> None:
                     st.session_state["usuario_logado"] = user
                     st.session_state["usuario_email"] = user.email
                     st.session_state["is_admin"] = conexao_bd.verificar_se_admin(user.email)
+                    st.session_state["usuario_perfil"] = "Administrador" if st.session_state["is_admin"] else "Técnico de TI"
+                    st.session_state["tecnico_fixado"] = identificar_tecnico_por_email(user.email)
+
+                    # Persistência de Sessão Segura (Permanece logado até clicar em Sair)
+                    token = gerar_token_sessao({
+                        "email": user.email,
+                        "id": getattr(user, "id", "user"),
+                        "perfil": st.session_state["usuario_perfil"],
+                        "is_admin": st.session_state["is_admin"]
+                    })
+                    if token:
+                        st.query_params["session_token"] = token
+
+                    email_limpo = user.email.lower()
+                    if destino_inicial == "📊 Dashboard de Gráficos" or any(k in email_limpo for k in ["dash", "gestor", "diretoria", "gerente", "coord"]):
+                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
+                    elif destino_inicial == "📝 Nova Requisição":
+                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[1]
+                    else:
+                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[2]
+
                     st.success("✅ Acesso autorizado com sucesso!")
                     st.rerun()
                 else:
                     st.error(f"❌ {msg}")
 
+        # Acesso Direto para Gestão / Visualizador de Gráficos
+        with st.expander("📊 Acesso Direto ao Dashboard (Gestão & Diretoria)", expanded=False):
+            st.caption("Acesso direto para visualização de relatórios gerenciais e gráficos analíticos.")
+            chave_gestao = st.text_input("Chave de Acesso / Senha de Gestão", type="password", key="pwd_gestao_dashboard")
+            if st.button("Entrar Direto no Dashboard 📊", use_container_width=True, key="btn_login_gestor"):
+                senha_correta = st.secrets.get("ADMIN_PASSWORD", "admin")
+                chaves_validas = ["dashboard", "gestor", "diretoria", "gerente", senha_correta]
+                if chave_gestao and chave_gestao.strip().lower() in [k.lower() for k in chaves_validas]:
+                    dados_gestor = {
+                        "email": "gestao.ti@saude.gov.br",
+                        "id": "gestor_dashboard",
+                        "perfil": "Gestor / Visualizador",
+                        "is_admin": False
+                    }
+                    st.session_state["usuario_logado"] = dados_gestor
+                    st.session_state["usuario_email"] = dados_gestor["email"]
+                    st.session_state["usuario_perfil"] = dados_gestor["perfil"]
+                    st.session_state["is_admin"] = False
+                    st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
+                    st.session_state["tecnico_fixado"] = None
+
+                    token = gerar_token_sessao(dados_gestor)
+                    if token:
+                        st.query_params["session_token"] = token
+
+                    st.success("✅ Acesso autorizado! Redirecionando para o Dashboard...")
+                    st.rerun()
+                else:
+                    st.error("❌ Chave de acesso incorreta. Digite 'gestor', 'dashboard' ou a senha mestra.")
+
         # Acesso de contingência com Senha Mestra de Administrador
         with st.expander("🔑 Acesso Administrativo com Senha Mestra"):
             senha_admin_mestra = st.text_input("Senha Mestra", type="password", key="pwd_mestra_emergencia")
-            if st.button("Entrar com Senha Mestra", use_container_width=True):
+            if st.button("Entrar com Senha Mestra", use_container_width=True, key="btn_login_admin_mestra"):
                 senha_correta = st.secrets.get("ADMIN_PASSWORD", "admin")
                 if senha_admin_mestra == senha_correta:
-                    st.session_state["usuario_logado"] = {"id": "admin_master"}
-                    st.session_state["usuario_email"] = "admin@sistema.local"
+                    dados_admin = {
+                        "email": "admin@sistema.local",
+                        "id": "admin_master",
+                        "perfil": "Administrador",
+                        "is_admin": True
+                    }
+                    st.session_state["usuario_logado"] = dados_admin
+                    st.session_state["usuario_email"] = dados_admin["email"]
+                    st.session_state["usuario_perfil"] = dados_admin["perfil"]
                     st.session_state["is_admin"] = True
+                    st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
+                    st.session_state["tecnico_fixado"] = None
+
+                    token = gerar_token_sessao(dados_admin)
+                    if token:
+                        st.query_params["session_token"] = token
+
                     st.success("✅ Acesso como Administrador Mestre concedido!")
                     st.rerun()
+        # Solicitação de Link para Redefinir Senha
+        with st.expander("📩 Esqueci minha senha ou preciso de link"):
+            st.caption("Digite seu e-mail cadastrado para receber um link de definição ou redefinição de senha do Supabase.")
+            email_recup = st.text_input("E-mail Cadastrado", key="input_email_recuperacao")
+            if st.button("Enviar Link de Acesso 📬", key="btn_enviar_recup", use_container_width=True):
+                if not email_recup or "@" not in email_recup:
+                    st.warning("⚠️ Digite um e-mail válido.")
                 else:
-                    st.error("❌ Senha mestra incorreta.")
+                    sucesso_rec, msg_rec = conexao_bd.solicitar_recuperacao_senha(email_recup)
+                    if sucesso_rec:
+                        st.success(f"✅ {msg_rec}")
+                    else:
+                        st.error(f"❌ {msg_rec}")
 
         st.caption("<div style='text-align: center; margin-top: 1.5rem;'>Ambiente Seguro • Autenticado via Supabase Cloud</div>", unsafe_allow_html=True)
 
@@ -148,17 +420,35 @@ def render_barra_lateral() -> None:
         st.subheader("👤 Usuário Conectado")
         st.write(f"**Conta:** `{st.session_state['usuario_email']}`")
 
-        if st.session_state["is_admin"]:
+        perfil_nome = st.session_state.get("usuario_perfil", "Técnico de TI")
+        if st.session_state.get("is_admin"):
             st.success("🛡️ Perfil: **Administrador**")
+        elif perfil_nome == "Gestor / Visualizador":
+            st.info("📊 Perfil: **Gestor / Visualizador**")
         else:
             st.info("🔧 Perfil: **Técnico de TI**")
 
+        tec_fixo = st.session_state.get("tecnico_fixado")
+        if tec_fixo:
+            st.caption(f"👨‍💻 Técnico Vinculado: **{tec_fixo.get('nome')}**")
+
         if st.button("🚪 Sair / Desconectar", use_container_width=True):
             conexao_bd.fazer_logout()
+            if "session_token" in st.query_params:
+                del st.query_params["session_token"]
             st.session_state["usuario_logado"] = None
             st.session_state["usuario_email"] = None
+            st.session_state["usuario_perfil"] = "Técnico de TI"
             st.session_state["is_admin"] = False
+            st.session_state["tecnico_fixado"] = None
             st.rerun()
+
+        st.divider()
+        st.subheader("📌 Navegação Rápida")
+        for aba_nome in ABAS_SISTEMA:
+            if st.button(aba_nome, key=f"side_nav_{aba_nome}", use_container_width=True):
+                st.session_state["aba_selecionada"] = aba_nome
+                st.rerun()
 
         st.divider()
         st.header("⚙️ Banco de Dados")
@@ -173,6 +463,221 @@ def render_barra_lateral() -> None:
 
         st.divider()
         st.caption(f"{APP_TITLE} • {APP_VERSION}")
+
+
+def render_aba_dashboard() -> None:
+    """Renderiza a aba de Dashboard Executivo com indicadores e gráficos analíticos interativos."""
+    col_t1, col_t2 = st.columns([5, 1])
+    with col_t1:
+        st.subheader("📊 Painel Analítico & Gráficos Gerenciais")
+    with col_t2:
+        if st.button("🔄 Atualizar", key="btn_att_dashboard", use_container_width=True):
+            st.rerun()
+
+    st.write("Acompanhamento visual em tempo real das ordens de serviço, manutenção de hardware e demandas das unidades de saúde.")
+
+    registros, erro = conexao_bd.buscar_requisicoes()
+    if erro:
+        st.error(f"Erro ao carregar dados do dashboard: {erro}")
+        return
+
+    if not registros:
+        st.info("ℹ️ Nenhuma requisição encontrada no banco de dados para gerar gráficos.")
+        return
+
+    df = pd.DataFrame(registros)
+
+    # Filtros Rápidos do Dashboard
+    with st.expander("🔍 Filtros de Análise dos Gráficos", expanded=False):
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+        with col_f1:
+            portes_disponiveis = ["Todos"] + sorted(list(df["porte"].dropna().unique())) if "porte" in df.columns else ["Todos"]
+            f_porte = st.selectbox("Filtrar por Porte:", portes_disponiveis, key="dash_f_porte")
+        with col_f2:
+            zonas_disponiveis = ["Todas"] + sorted(list(df["zona"].dropna().unique())) if "zona" in df.columns else ["Todas"]
+            f_zona = st.selectbox("Filtrar por Zona/Região:", zonas_disponiveis, key="dash_f_zona")
+        with col_f3:
+            tipos_disp = ["Todos"] + sorted(list(df["tipo_visita"].dropna().unique())) if "tipo_visita" in df.columns else ["Todos"]
+            f_tipo = st.selectbox("Tipo de Visita:", tipos_disp, key="dash_f_tipo")
+        with col_f4:
+            f_status = st.selectbox("Status:", ["Todos"] + OPCOES_STATUS, key="dash_f_status")
+
+    df_dash = df.copy()
+    if f_porte != "Todos" and "porte" in df_dash.columns:
+        df_dash = df_dash[df_dash["porte"] == f_porte]
+    if f_zona != "Todas" and "zona" in df_dash.columns:
+        df_dash = df_dash[df_dash["zona"] == f_zona]
+    if f_tipo != "Todos" and "tipo_visita" in df_dash.columns:
+        df_dash = df_dash[df_dash["tipo_visita"] == f_tipo]
+    if f_status != "Todos" and "status" in df_dash.columns:
+        df_dash = df_dash[df_dash["status"] == f_status]
+
+    if df_dash.empty:
+        st.warning("Nenhum dado encontrado para os filtros selecionados.")
+        return
+
+    # Cards de KPIs Superiores
+    total_chamados = len(df_dash)
+    total_pecas = int(df_dash["quantidade"].sum()) if "quantidade" in df_dash.columns else total_chamados
+    status_serie = df_dash["status"] if "status" in df_dash.columns else pd.Series([], dtype=str)
+    pendentes = int((status_serie == OPCOES_STATUS[0]).sum())
+    manutencao = int((status_serie == OPCOES_STATUS[1]).sum())
+    concluidos = int((status_serie == OPCOES_STATUS[2]).sum())
+    taxa_resolucao = (concluidos / total_chamados * 100) if total_chamados > 0 else 0
+
+    st.markdown("##### 📈 Indicadores Chave de Desempenho (KPIs)")
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("📋 Total de Chamados", f"{total_chamados}", f"{total_pecas} itens/peças")
+    k2.metric("🟢 Concluídos / Devolvidos", f"{concluidos}", f"{taxa_resolucao:.1f}% resolvidos")
+    k3.metric("🔵 Em Manutenção", f"{manutencao}", "Em bancada/técnico")
+    k4.metric("🟡 Pendentes", f"{pendentes}", "Aguardando reposição")
+    k5.metric("🏥 Unidades Atendidas", f"{df_dash['unidade_nome'].nunique() if 'unidade_nome' in df_dash.columns else 0}", "Postos impactados")
+
+    st.divider()
+
+    # SEÇÃO DE GRÁFICOS
+    # LINHA 1: Status (Donut) & Tipo de Visita (Barra)
+    st.markdown("#### 🔄 Ciclo de Vida e Natureza dos Atendimentos")
+    col_g1, col_g2 = st.columns(2)
+
+    with col_g1:
+        st.markdown("##### 📌 Distribuição por Status de Atendimento")
+        df_st = df_dash["status"].value_counts().reset_index()
+        df_st.columns = ["Status", "Total"]
+
+        mapa_cores = {
+            OPCOES_STATUS[0]: "#F59E0B",
+            OPCOES_STATUS[1]: "#3B82F6",
+            OPCOES_STATUS[2]: "#10B981"
+        }
+        cores_lista = [mapa_cores.get(s, "#6B7280") for s in df_st["Status"]]
+
+        grafico_donut = alt.Chart(df_st).mark_arc(innerRadius=60).encode(
+            theta=alt.Theta(field="Total", type="quantitative"),
+            color=alt.Color(
+                field="Status",
+                type="nominal",
+                scale=alt.Scale(domain=list(df_st["Status"]), range=cores_lista),
+                legend=alt.Legend(orient="bottom", columns=1)
+            ),
+            tooltip=["Status", "Total"]
+        ).properties(height=320)
+        st.altair_chart(grafico_donut, use_container_width=True)
+
+    with col_g2:
+        st.markdown("##### 🛠️ Volume por Tipo de Visita Técnica")
+        df_tv = df_dash["tipo_visita"].value_counts().reset_index()
+        df_tv.columns = ["Tipo de Visita", "Total"]
+        grafico_visita = alt.Chart(df_tv).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+            x=alt.X("Tipo de Visita:N", sort="-y", axis=alt.Axis(labelAngle=-15)),
+            y=alt.Y("Total:Q"),
+            color=alt.Color("Tipo de Visita:N", scale=alt.Scale(scheme="tealblues"), legend=None),
+            tooltip=["Tipo de Visita", "Total"]
+        ).properties(height=320)
+        st.altair_chart(grafico_visita, use_container_width=True)
+
+    st.divider()
+
+    # LINHA 2: Top Equipamentos / Peças Solicitadas & Motivos de Chamado
+    st.markdown("#### 💻 Equipamentos e Motivos Recorrentes")
+    col_g3, col_g4 = st.columns(2)
+
+    with col_g3:
+        st.markdown("##### 📦 Top Materiais / Peças Mais Demandados")
+        df_eq = df_dash["equipamento_nome"].value_counts().head(8).reset_index()
+        df_eq.columns = ["Equipamento", "Total"]
+        grafico_eq = alt.Chart(df_eq).mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5).encode(
+            x=alt.X("Total:Q"),
+            y=alt.Y("Equipamento:N", sort="-x"),
+            color=alt.Color("Total:Q", scale=alt.Scale(scheme="blues"), legend=None),
+            tooltip=["Equipamento", "Total"]
+        ).properties(height=340)
+        st.altair_chart(grafico_eq, use_container_width=True)
+
+    with col_g4:
+        st.markdown("##### ⚠️ Principais Motivos de Defeito / Chamado")
+        df_mot = df_dash["motivo_chamado"].value_counts().head(8).reset_index()
+        df_mot.columns = ["Motivo", "Total"]
+        grafico_mot = alt.Chart(df_mot).mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5).encode(
+            x=alt.X("Total:Q"),
+            y=alt.Y("Motivo:N", sort="-x"),
+            color=alt.Color("Total:Q", scale=alt.Scale(scheme="orangered"), legend=None),
+            tooltip=["Motivo", "Total"]
+        ).properties(height=340)
+        st.altair_chart(grafico_mot, use_container_width=True)
+
+    st.divider()
+
+    # LINHA 3: Distribuição Territorial (Zonas e Portes)
+    st.markdown("#### 🗺️ Análise Territorial e Estrutural")
+    col_g5, col_g6 = st.columns(2)
+
+    with col_g5:
+        st.markdown("##### 📍 Chamados por Zona Operacional / Região")
+        df_zona = df_dash["zona"].value_counts().reset_index()
+        df_zona.columns = ["Zona", "Total"]
+        grafico_zona = alt.Chart(df_zona).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+            x=alt.X("Zona:N", sort="-y"),
+            y=alt.Y("Total:Q"),
+            color=alt.Color("Zona:N", scale=alt.Scale(scheme="category10"), legend=None),
+            tooltip=["Zona", "Total"]
+        ).properties(height=320)
+        st.altair_chart(grafico_zona, use_container_width=True)
+
+    with col_g6:
+        st.markdown("##### 🏢 Proporção por Porte da Unidade (Porte IV vs Porte I)")
+        df_porte = df_dash["porte"].value_counts().reset_index()
+        df_porte.columns = ["Porte", "Total"]
+        grafico_porte = alt.Chart(df_porte).mark_arc(innerRadius=45).encode(
+            theta=alt.Theta("Total:Q"),
+            color=alt.Color("Porte:N", scale=alt.Scale(scheme="dark2"), legend=alt.Legend(orient="bottom")),
+            tooltip=["Porte", "Total"]
+        ).properties(height=320)
+        st.altair_chart(grafico_porte, use_container_width=True)
+
+    st.divider()
+
+    # LINHA 4: Top Unidades Críticas e Setores
+    st.markdown("#### 🏥 Concentração de Demandas nas Unidades e Setores")
+    col_g7, col_g8 = st.columns(2)
+
+    with col_g7:
+        st.markdown("##### 🏆 Top 10 Unidades com Maior Volume de Chamados")
+        df_top_uni = df_dash["unidade_nome"].value_counts().head(10).reset_index()
+        df_top_uni.columns = ["Unidade de Saúde", "Chamados"]
+        grafico_top_uni = alt.Chart(df_top_uni).mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5).encode(
+            x=alt.X("Chamados:Q"),
+            y=alt.Y("Unidade de Saúde:N", sort="-x"),
+            color=alt.Color("Chamados:Q", scale=alt.Scale(scheme="purples"), legend=None),
+            tooltip=["Unidade de Saúde", "Chamados"]
+        ).properties(height=360)
+        st.altair_chart(grafico_top_uni, use_container_width=True)
+
+    with col_g8:
+        st.markdown("##### 🚪 Top 10 Setores / Salas com Mais Incidentes")
+        df_top_set = df_dash["setor_nome"].value_counts().head(10).reset_index()
+        df_top_set.columns = ["Setor", "Chamados"]
+        grafico_top_set = alt.Chart(df_top_set).mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5).encode(
+            x=alt.X("Chamados:Q"),
+            y=alt.Y("Setor:N", sort="-x"),
+            color=alt.Color("Chamados:Q", scale=alt.Scale(scheme="magma"), legend=None),
+            tooltip=["Setor", "Chamados"]
+        ).properties(height=360)
+        st.altair_chart(grafico_top_set, use_container_width=True)
+
+    st.divider()
+
+    # LINHA 5: Distribuição por Técnico Responsável
+    st.markdown("#### 👨‍💻 Produtividade e Distribuição por Técnico")
+    df_tec = df_dash["tecnico_nome"].value_counts().reset_index()
+    df_tec.columns = ["Técnico", "Atendimentos"]
+    grafico_tec = alt.Chart(df_tec).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+        x=alt.X("Técnico:N", sort="-y"),
+        y=alt.Y("Atendimentos:Q"),
+        color=alt.Color("Técnico:N", scale=alt.Scale(scheme="tableau10"), legend=None),
+        tooltip=["Técnico", "Atendimentos"]
+    ).properties(height=300)
+    st.altair_chart(grafico_tec, use_container_width=True)
 
 
 def render_aba_nova_requisicao() -> None:
@@ -225,26 +730,42 @@ def render_aba_nova_requisicao() -> None:
     with col_info_porte:
         st.success(f"📍 **{porte_escolhido} (Banco de Dados):** {len(dict_unidades)} unidades e **{len(dict_setores)} setores** carregados diretamente do Supabase.")
 
-    # Sugestão inteligente do técnico pelo e-mail autenticado
-    email_atual = (st.session_state.get("usuario_email") or "").lower()
-    index_tec_sugerido = None
+    # Identificação e fixação do técnico responsável a partir do login
+    tec_fixo = st.session_state.get("tecnico_fixado")
+    if not tec_fixo:
+        tec_fixo = identificar_tecnico_por_email(st.session_state.get("usuario_email"))
+        if tec_fixo:
+            st.session_state["tecnico_fixado"] = tec_fixo
+
+    nome_tec_fixo = tec_fixo.get("nome") if tec_fixo else None
     lista_nomes_tecs = list(dict_tecnicos.keys())
-    for idx, tec_nome in enumerate(lista_nomes_tecs):
-        if tec_nome.lower() in email_atual:
-            index_tec_sugerido = idx
-            break
+
+    # Indicador de técnico fixado
+    if nome_tec_fixo and nome_tec_fixo in dict_tecnicos:
+        st.success(f"👨‍💻 **Técnico Responsável Fixado:** `{nome_tec_fixo}` *(Autenticado pelo login)*")
+        permitir_troca = st.session_state.get("is_admin", False)
+        trocar_tec = False
+        if permitir_troca:
+            trocar_tec = st.checkbox("🔄 Trocar técnico responsável deste chamado (Permissão Admin)", value=False)
+    else:
+        trocar_tec = True
 
     with st.form(key="form_requisicao", clear_on_submit=True):
         st.subheader("Dados do Atendimento")
         col1, col2 = st.columns(2)
 
         with col1:
-            label_tecnico = st.selectbox(
-                "Técnico Responsável *",
-                options=lista_nomes_tecs,
-                index=index_tec_sugerido,
-                placeholder="Selecione o seu nome..."
-            )
+            if nome_tec_fixo and not trocar_tec:
+                st.text_input("Técnico Responsável (Fixado) *", value=nome_tec_fixo, disabled=True)
+                label_tecnico = nome_tec_fixo
+            else:
+                idx_default = lista_nomes_tecs.index(nome_tec_fixo) if (nome_tec_fixo and nome_tec_fixo in lista_nomes_tecs) else None
+                label_tecnico = st.selectbox(
+                    "Técnico Responsável *",
+                    options=lista_nomes_tecs,
+                    index=idx_default,
+                    placeholder="Selecione o seu nome..."
+                )
             numero_chamado = st.text_input("Número do Chamado / Ticket (Opcional)")
             tipo_visita = st.selectbox("Tipo de Visita *", OPCOES_TIPO_VISITA)
             data_retorno = st.date_input(
@@ -476,21 +997,23 @@ def render_aba_consulta() -> None:
         colunas_exibir = [k for k in MAPA_COLUNAS_RELATORIO.keys() if k in df_filtrado.columns]
         df_display = df_filtrado[colunas_exibir].rename(columns=MAPA_COLUNAS_RELATORIO)
 
-        if "Data Solicitação" in df_display.columns:
-            try:
-                df_display["Data Solicitação"] = pd.to_datetime(
-                    df_display["Data Solicitação"], errors="coerce"
-                ).dt.strftime("%d/%m/%Y %H:%M").fillna("")
-            except Exception:
-                pass
+        for col_dt_label in ["Data Solicitação"]:
+            if col_dt_label in df_display.columns:
+                try:
+                    df_display[col_dt_label] = pd.to_datetime(
+                        df_display[col_dt_label], errors="coerce"
+                    ).dt.strftime("%d/%m/%Y %H:%M").fillna("")
+                except Exception:
+                    pass
 
-        if "Previsão Retorno" in df_display.columns:
-            try:
-                df_display["Previsão Retorno"] = pd.to_datetime(
-                    df_display["Previsão Retorno"], errors="coerce"
-                ).dt.strftime("%d/%m/%Y").fillna("")
-            except Exception:
-                pass
+        for col_prev_label in ["Previsão de Retorno", "Previsão Retorno"]:
+            if col_prev_label in df_display.columns:
+                try:
+                    df_display[col_prev_label] = pd.to_datetime(
+                        df_display[col_prev_label], errors="coerce"
+                    ).dt.strftime("%d/%m/%Y").fillna("")
+                except Exception:
+                    pass
 
         st.dataframe(df_display, use_container_width=True, hide_index=True)
 
@@ -527,14 +1050,49 @@ def render_aba_consulta() -> None:
 
         # Exportação para CSV / Excel
         st.divider()
-        csv_bytes = df_display.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
-        st.download_button(
-            label="📥 Baixar Relatório em Excel / CSV",
-            data=csv_bytes,
-            file_name=f"relatorio_requisicoes_ti_{date.today().strftime('%d_%m_%Y')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+        st.markdown("##### 📥 Exportação de Dados para Excel / CSV")
+
+        # Base geral completa (sem filtros) com todas as 17 colunas mapeadas
+        colunas_todas = [k for k in MAPA_COLUNAS_RELATORIO.keys() if k in df.columns]
+        df_completo_export = df[colunas_todas].rename(columns=MAPA_COLUNAS_RELATORIO)
+        if "Data Solicitação" in df_completo_export.columns:
+            try:
+                df_completo_export["Data Solicitação"] = pd.to_datetime(
+                    df_completo_export["Data Solicitação"], errors="coerce"
+                ).dt.strftime("%d/%m/%Y %H:%M").fillna("")
+            except Exception:
+                pass
+        for col_prev in ["Previsão de Retorno", "Previsão Retorno"]:
+            if col_prev in df_completo_export.columns:
+                try:
+                    df_completo_export[col_prev] = pd.to_datetime(
+                        df_completo_export[col_prev], errors="coerce"
+                    ).dt.strftime("%d/%m/%Y").fillna("")
+                except Exception:
+                    pass
+
+        col_dw1, col_dw2 = st.columns(2)
+        with col_dw1:
+            csv_filtrado_bytes = df_display.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
+            st.download_button(
+                label=f"📥 Baixar Relatório Filtrado ({len(df_display)} registros)",
+                data=csv_filtrado_bytes,
+                file_name=f"relatorio_chamados_filtrados_{date.today().strftime('%d_%m_%Y')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="btn_down_csv_filtrado"
+            )
+
+        with col_dw2:
+            csv_completo_bytes = df_completo_export.to_csv(index=False, sep=";", encoding="utf-8-sig").encode("utf-8-sig")
+            st.download_button(
+                label=f"📦 Baixar Base Completa de Chamados ({len(df_completo_export)} registros)",
+                data=csv_completo_bytes,
+                file_name=f"base_completa_requisicoes_ti_{date.today().strftime('%d_%m_%Y')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="btn_down_csv_completo"
+            )
 
 
 def render_aba_admin() -> None:
@@ -722,20 +1280,30 @@ def main() -> None:
     # Renderiza o ambiente autenticado
     render_barra_lateral()
     st.title(f"{APP_ICON} {APP_TITLE}")
+    # Barra Superior de Navegação Dinâmica entre Abas
+    aba_atual = st.segmented_control(
+        "Navegação Principal",
+        options=ABAS_SISTEMA,
+        default=st.session_state.get("aba_selecionada", ABAS_SISTEMA[0]),
+        selection_mode="single",
+        label_visibility="collapsed",
+        key="nav_segmented_abas"
+    )
 
-    aba_requisicao, aba_consulta, aba_admin = st.tabs([
-        "📝 Nova Requisição",
-        "📋 Consultar e Histórico",
-        "⚙️ Gerenciar Cadastros (Admin)"
-    ])
+    if aba_atual:
+        st.session_state["aba_selecionada"] = aba_atual
+    else:
+        aba_atual = st.session_state.get("aba_selecionada", ABAS_SISTEMA[0])
 
-    with aba_requisicao:
+    st.write("")
+
+    if aba_atual == ABAS_SISTEMA[0]:
+        render_aba_dashboard()
+    elif aba_atual == ABAS_SISTEMA[1]:
         render_aba_nova_requisicao()
-
-    with aba_consulta:
+    elif aba_atual == ABAS_SISTEMA[2]:
         render_aba_consulta()
-
-    with aba_admin:
+    elif aba_atual == ABAS_SISTEMA[3]:
         render_aba_admin()
 
 

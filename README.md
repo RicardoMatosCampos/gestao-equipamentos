@@ -29,21 +29,21 @@ gestao-equipamentos/
 ## 🚀 Principais Módulos
 
 ### 1. `app.py` (Interface do Usuário)
-- **Autenticação Centralizada (*Gatekeeper*)**: Protege o acesso às telas do sistema.
+- **Autenticação Centralizada (*Gatekeeper*)**: Protege o acesso às telas do sistema com opção de login técnico, administrador mestre e **Acesso Executivo Direto ao Dashboard**.
+- **📊 Dashboard Analítico com 8 Gráficos Interativos**: Painel executivo com gráficos de Donut e Barras desenvolvidos em Altair (Status do atendimento, Tipos de visita técnica, Top materiais solicitados, Motivos recorrentes, Distribuição por zona operacional, Proporção por porte, Top 10 unidades com mais chamados e Produtividade por técnico).
 - **Abertura de Chamados Dinâmica**: Ao selecionar o porte da unidade (**Porte IV** com 29 setores ou **Porte I** com 8 setores), os postos de saúde e setores são filtrados e carregados diretamente do banco de dados em tempo real, sem valores fixos no código (*no hardcoding*).
-- **Dashboard e Métricas em Tempo Real**: Indicadores de chamados no mês, material mais demandado, retornos pendentes na semana e contadores de status de ciclo de vida.
-- **Filtros em Cascata e Relatórios**: Pesquisa por status, porte, unidade, setor, técnico e material, com exportação instantânea para Excel/CSV.
+- **Filtros em Cascata e Relatórios Completos**: Pesquisa detalhada e exportação profissional para Excel/CSV com **17 colunas padronizadas**, incluindo botão para baixar o relatório filtrado atual ou a base histórica completa.
 - **Painel Administrativo**: Gestão de cadastros de setores, unidades, técnicos e equipamentos restrita a administradores.
 
 ### 2. `conexao_bd.py` (Camada de Dados e Supabase)
 - **Singleton Connection**: Conexão única com o Supabase otimizada via `@st.cache_resource`.
 - **Autenticação Supabase Auth**: Métodos `fazer_login()` e `fazer_logout()` com suporte a contas corporativas.
 - **Consultas Relacionais (*JOINs*)**: Busca de chamados cruzando automaticamente chaves estrangeiras com nomes reais das unidades, setores, técnicos e equipamentos.
-- **Tratamento Defensivo e Fallbacks**: Garantia de resiliência caso a estrutura de tabelas esteja em processo de migração DDL.
+- **Tratamento Defensivo e Fallbacks**: Mapeamento bidirecional transparente com suporte aos schemas atuais (`ticket`, `motivo`, `data_prevista`, etc.).
 
 ### 3. `constantes.py` (Central de Constantes de Domínio)
 - Elimina completamente *magic strings* e duplicações.
-- Centraliza opções de ciclo de vida (`OPCOES_STATUS`), tipos de visita técnica, categorias de equipamentos, zonas operacionais e mapeamento de nomes de colunas para relatórios.
+- Centraliza opções de ciclo de vida (`OPCOES_STATUS`), tipos de visita técnica (incluindo *Manutenção Programada Preventiva*), abas do sistema (`ABAS_SISTEMA`) e mapeamento completo de colunas para relatórios.
 
 ---
 

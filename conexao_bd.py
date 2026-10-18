@@ -5,6 +5,11 @@ Este módulo implementa o padrão Repository / DAO (Data Access Object) para
 interagir com o banco de dados PostgreSQL e serviços de autenticação do Supabase.
 """
 
+import base64
+import hashlib
+import hmac
+import json
+import time
 from typing import Optional, List, Dict, Any, Tuple
 import streamlit as st
 from supabase import create_client, Client
@@ -81,6 +86,46 @@ def fazer_logout() -> Tuple[bool, str]:
         return False, f"Erro ao encerrar sessão: {str(exc)}"
 
 
+def redefinir_senha_com_token(access_token: str, refresh_token: str, nova_senha: str) -> Tuple[bool, str]:
+    """
+    Atualiza a senha do usuário autenticado a partir de um token de link/convite do Supabase.
+
+    Args:
+        access_token (str): Token de acesso recebido na URL do link.
+        refresh_token (str): Token de atualização.
+        nova_senha (str): Nova senha a ser definida.
+
+    Returns:
+        Tuple[bool, str]: Sucesso e mensagem descritiva.
+    """
+    try:
+        supabase = iniciar_conexao()
+        supabase.auth.set_session(access_token.strip(), (refresh_token or "").strip())
+        supabase.auth.update_user({"password": nova_senha})
+        return True, "Senha cadastrada com sucesso! Você já pode fazer login normalmente."
+    except Exception as exc:
+        return False, f"Não foi possível salvar a senha: {str(exc)}"
+
+
+def solicitar_recuperacao_senha(email: str) -> Tuple[bool, str]:
+    """
+    Solicita o envio de link para redefinição de senha ao Supabase.
+
+    Args:
+        email (str): E-mail cadastrado.
+
+    Returns:
+        Tuple[bool, str]: Sucesso e mensagem informativa.
+    """
+    try:
+        supabase = iniciar_conexao()
+        supabase.auth.reset_password_for_email(email.strip().lower())
+        return True, f"Link de redefinição enviado com sucesso para {email}! Verifique sua caixa de entrada."
+    except Exception as exc:
+        return False, f"Erro ao solicitar redefinição: {str(exc)}"
+
+
+
 def verificar_se_admin(email: Optional[str]) -> bool:
     """
     Verifica se o e-mail do usuário possui privilégios de Administrador.
@@ -105,6 +150,117 @@ def verificar_se_admin(email: Optional[str]) -> bool:
         admin_emails = [str(a).strip().lower() for a in admin_emails]
 
     return email_limpo in admin_emails
+
+
+def gerar_token_sessao(dados_usuario: Dict[str, Any]) -> str:
+    """
+    Gera um token criptográfico assinado com HMAC-SHA256 para persistência
+    de login entre atualizações de página (F5) e navegação mobile.
+
+    Args:
+        dados_usuario (Dict[str, Any]): Informações essenciais do usuário logado.
+
+    Returns:
+        str: Token codificado e assinado.
+    """
+    try:
+        url = st.secrets["SUPABASE_URL"].strip()
+        key = st.secrets["SUPABASE_KEY"].strip()
+        secret = (key + url).encode("utf-8")
+
+        payload = {
+            "email": dados_usuario.get("email"),
+            "id": str(dados_usuario.get("id")),
+            "perfil": dados_usuario.get("perfil", "Técnico de TI"),
+            "is_admin": bool(dados_usuario.get("is_admin", False)),
+            "ts": int(time.time())
+        }
+        raw_bytes = json.dumps(payload).encode("utf-8")
+        b64_payload = base64.urlsafe_b64encode(raw_bytes).decode("utf-8")
+        signature = hmac.new(secret, b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        return f"{b64_payload}.{signature}"
+    except Exception:
+        return ""
+
+
+def validar_token_sessao(token: Optional[str]) -> Optional[Dict[str, Any]]:
+    """
+    Valida a autenticidade e validade (30 dias) do token de sessão.
+    Permite que o usuário permaneça logado mesmo se a página for recarregada.
+
+    Args:
+        token (Optional[str]): Token recebido nos query parameters.
+
+    Returns:
+        Optional[Dict[str, Any]]: Dados do usuário caso o token seja válido, ou None.
+    """
+    if not token or "." not in token:
+        return None
+    try:
+        url = st.secrets["SUPABASE_URL"].strip()
+        key = st.secrets["SUPABASE_KEY"].strip()
+        secret = (key + url).encode("utf-8")
+
+        b64_payload, signature = token.strip().split(".", 1)
+        expected_sig = hmac.new(secret, b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected_sig):
+            return None
+
+        raw_bytes = base64.urlsafe_b64decode(b64_payload.encode("utf-8"))
+        payload = json.loads(raw_bytes.decode("utf-8"))
+
+        # Validade de 30 dias (técnicos não precisam digitar senha a todo instante)
+        idade_segundos = time.time() - payload.get("ts", 0)
+        if idade_segundos > 30 * 24 * 3600 or idade_segundos < -60:
+            return None
+
+        return payload
+    except Exception:
+        return None
+
+
+def identificar_tecnico_por_email(email: Optional[str]) -> Optional[Dict[str, Any]]:
+    """
+    Identifica automaticamente o técnico correspondente ao e-mail autenticado.
+    Suporta correspondência inteligente por primeiro nome, sobrenome ou partes do nome.
+
+    Args:
+        email (Optional[str]): E-mail do usuário autenticado.
+
+    Returns:
+        Optional[Dict[str, Any]]: Registro do técnico no banco de dados ou None.
+    """
+    if not email:
+        return None
+    try:
+        tecnicos, _ = buscar_tecnicos()
+        if not tecnicos:
+            return None
+        email_completo = email.strip().lower()
+        email_clean = email_completo.split("@")[0]
+
+        # 1. Prioridade Máxima: Correspondência direta pela coluna 'email' na tabela tecnicos
+        for t in tecnicos:
+            if t.get("email") and str(t.get("email")).strip().lower() == email_completo:
+                return t
+
+        # 2. Correspondência pelo primeiro ou último nome
+        for t in tecnicos:
+            nome_completo = str(t.get("nome", "")).lower()
+            partes = nome_completo.split()
+            if partes and (partes[0] in email_clean or partes[-1] in email_clean):
+                return t
+
+        # 3. Correspondência por qualquer parte com mais de 3 caracteres
+        for t in tecnicos:
+            nome_completo = str(t.get("nome", "")).lower()
+            for p in nome_completo.split():
+                if len(p) >= 4 and p in email_clean:
+                    return t
+
+        return None
+    except Exception:
+        return None
 
 
 # ==============================================================================
