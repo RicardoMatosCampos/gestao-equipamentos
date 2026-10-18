@@ -29,8 +29,9 @@ gestao-equipamentos/
 ## 🚀 Principais Módulos
 
 ### 1. `app.py` (Interface do Usuário)
-- **Autenticação Centralizada (*Gatekeeper*)**: Protege o acesso às telas do sistema com opção de login técnico, administrador mestre e **Acesso Executivo Direto ao Dashboard**.
-- **📊 Dashboard Analítico com 8 Gráficos Interativos**: Painel executivo com gráficos de Donut e Barras desenvolvidos em Altair (Status do atendimento, Tipos de visita técnica, Top materiais solicitados, Motivos recorrentes, Distribuição por zona operacional, Proporção por porte, Top 10 unidades com mais chamados e Produtividade por técnico).
+- **Portal de Acesso Institucional (*Gatekeeper*)**: Design corporativo em abas com brasão vetorial, aviso de conformidade com a LGPD (Lei nº 13.709/2018), suporte a Supabase Auth, recuperação de senha, contingência e acesso direto para fiscais de contrato e diretoria.
+- **📊 Painel Executivo de SLA & Fiscalização**: Indicadores contratuais de nível de serviço (SLA), taxa de resolução, proporção de visitas preventivas vs corretivas, detecção automática de ordens de serviço com prazo expirado e painel de fiscalização prioritária.
+- **📄 Espelho Formal de Ordem de Serviço (Impressão & Assinatura)**: Gera termo oficial de atendimento e manutenção técnica com campos de assinatura para preposto de TI e responsável pelo posto de saúde, permitindo impressão e exportação em PDF.
 - **Abertura de Chamados Dinâmica**: Ao selecionar o porte da unidade (**Porte IV** com 29 setores ou **Porte I** com 8 setores), os postos de saúde e setores são filtrados e carregados diretamente do banco de dados em tempo real, sem valores fixos no código (*no hardcoding*).
 - **Filtros em Cascata e Relatórios Completos**: Pesquisa detalhada e exportação profissional para Excel/CSV com **17 colunas padronizadas**, incluindo botão para baixar o relatório filtrado atual ou a base histórica completa.
 - **Painel Administrativo**: Gestão de cadastros de setores, unidades, técnicos e equipamentos restrita a administradores.

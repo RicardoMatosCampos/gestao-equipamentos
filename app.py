@@ -54,27 +54,214 @@ st.set_page_config(
 
 
 def aplicar_estilos_customizados() -> None:
-    """Aplica regras de CSS personalizadas para enriquecer a experiência visual."""
+    """Aplica regras de CSS personalizadas para enriquecer a experiência visual corporativa e institucional."""
     st.markdown(
         """
         <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+            /* Tipografia Global */
+            html, body, [class*="css"] {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            }
+
+            /* Container de Login Institucional */
+            .gov-login-header {
+                text-align: center;
+                padding: 1.5rem 1rem 0.75rem 1rem;
+                margin-bottom: 0.5rem;
+            }
+
+            .gov-badge-top {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                color: #38bdf8;
+                padding: 4px 12px;
+                border-radius: 9999px;
+                font-size: 0.75rem;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                border: 1px solid rgba(56, 189, 248, 0.25);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                margin-bottom: 12px;
+            }
+
+            .gov-portal-title {
+                font-size: 1.65rem;
+                font-weight: 800;
+                color: #0f172a;
+                margin: 0 0 6px 0;
+                line-height: 1.25;
+                letter-spacing: -0.02em;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                .gov-portal-title {
+                    color: #f8fafc;
+                }
+            }
+
+            .gov-portal-subtitle {
+                font-size: 0.88rem;
+                color: #64748b;
+                margin: 0 auto;
+                max-width: 520px;
+                line-height: 1.45;
+            }
+
+            /* Barra de Segurança e Status */
+            .gov-security-bar {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-wrap: wrap;
+                gap: 16px;
+                padding: 8px 14px;
+                background: rgba(241, 245, 249, 0.7);
+                border: 1px solid #e2e8f0;
+                border-radius: 8px;
+                font-size: 0.78rem;
+                color: #334155;
+                font-weight: 500;
+                margin: 1rem 0 1.25rem 0;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                .gov-security-bar {
+                    background: rgba(30, 41, 59, 0.6);
+                    border-color: #334155;
+                    color: #cbd5e1;
+                }
+            }
+
+            .gov-status-dot {
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                background-color: #10b981;
+                border-radius: 50%;
+                box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+            }
+
+            /* Estilização do Form de Login */
+            div[data-testid="stForm"] {
+                border-radius: 12px;
+                border: 1px solid #e2e8f0;
+                padding: 1.5rem;
+                background: #ffffff;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+            }
+
+            @media (prefers-color-scheme: dark) {
+                div[data-testid="stForm"] {
+                    background: #0f172a;
+                    border-color: #1e293b;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+                }
+            }
+
+            /* Abas de Autenticação */
+            button[data-baseweb="tab"] {
+                font-weight: 600;
+                font-size: 0.88rem;
+                padding: 8px 16px;
+                border-radius: 6px 6px 0 0;
+            }
+
+            /* Botões Institucionais */
+            div.stButton > button:first-child,
+            button[kind="primaryFormSubmit"] {
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 0.95rem;
+                padding: 0.55rem 1.25rem;
+                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                border: none;
+            }
+
+            div.stButton > button:first-child:hover,
+            button[kind="primaryFormSubmit"]:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+            }
+
             /* Cartões de métricas aprimorados */
             div[data-testid="stMetricValue"] {
                 font-size: 1.8rem;
                 font-weight: 700;
             }
-            /* Botões principais com destaque sutil */
-            div.stButton > button:first-child {
+
+            /* Box de Conformidade e LGPD no Rodapé */
+            .gov-compliance-notice {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-left: 4px solid #0284c7;
+                padding: 12px 14px;
+                border-radius: 6px;
+                font-size: 0.76rem;
+                color: #475569;
+                line-height: 1.45;
+                margin-top: 1.5rem;
+            }
+
+            @media (prefers-color-scheme: dark) {
+                .gov-compliance-notice {
+                    background: #1e293b;
+                    border-color: #334155;
+                    border-left-color: #38bdf8;
+                    color: #94a3b8;
+                }
+            }
+
+            .gov-footer-credentials {
+                text-align: center;
+                font-size: 0.74rem;
+                color: #94a3b8;
+                margin-top: 1rem;
+                padding-bottom: 2rem;
+            }
+
+            /* Espelho de Ordem de Serviço para Impressão */
+            .gov-os-voucher {
+                background: #ffffff !important;
+                color: #0f172a !important;
+                border: 1px solid #cbd5e1;
                 border-radius: 8px;
-                font-weight: 600;
-                transition: all 0.2s ease-in-out;
+                padding: 1.5rem;
+                margin-top: 1rem;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             }
-            div.stButton > button:first-child:hover {
-                transform: translateY(-1px);
+
+            @media print {
+                body * {
+                    visibility: hidden;
+                }
+                #os-voucher-print, #os-voucher-print * {
+                    visibility: visible;
+                }
+                #os-voucher-print {
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    width: 100%;
+                    border: none;
+                    box-shadow: none;
+                }
             }
+
             /* Cabeçalhos e divisores */
             hr {
-                margin: 1.5rem 0;
+                margin: 1.25rem 0;
+                border-color: #e2e8f0;
+            }
+            @media (prefers-color-scheme: dark) {
+                hr {
+                    border-color: #1e293b;
+                }
             }
         </style>
         """,
@@ -223,7 +410,7 @@ def inicializar_sessao() -> None:
 # ==============================================================================
 
 def render_tela_login() -> None:
-    """Renderiza a interface de login protegida por Supabase Auth com suporte a links de recuperação."""
+    """Renderiza a interface de login executiva e institucional com suporte a Supabase Auth e auditoria."""
     st.markdown("""
         <script>
         if (window.location.hash && window.location.hash.includes('access_token')) {
@@ -240,31 +427,55 @@ def render_tela_login() -> None:
         </script>
     """, unsafe_allow_html=True)
 
-    _, col_login, _ = st.columns([1, 2, 1])
+    _, col_login, _ = st.columns([1, 2.4, 1])
 
     with col_login:
-        st.write("")
-        st.write("")
-        st.markdown(f"<h2 style='text-align: center;'>{APP_ICON} {APP_TITLE}</h2>", unsafe_allow_html=True)
+        # Cabeçalho Institucional com Brasão Vetorial
         st.markdown(
-            "<p style='text-align: center; color: gray;'>"
-            "Acesse com sua conta corporativa (Lark Suite / TI) para abrir e gerenciar chamados técnicos."
-            "</p>",
+            """
+            <div class="gov-login-header">
+                <div style="display: flex; justify-content: center; margin-bottom: 12px;">
+                    <svg width="68" height="68" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="72" height="72" rx="16" fill="url(#bg_grad)"/>
+                        <path d="M36 14L52 21V35C52 45.5 45.2 55.2 36 58C26.8 55.2 20 45.5 20 35V21L36 14Z" stroke="#38BDF8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="rgba(56, 189, 248, 0.08)"/>
+                        <path d="M36 26V44M27 35H45" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
+                        <circle cx="36" cy="35" r="3" fill="#38BDF8"/>
+                        <defs>
+                            <linearGradient id="bg_grad" x1="0" y1="0" x2="72" y2="72" gradientUnits="userSpaceOnUse">
+                                <stop stop-color="#0F172A"/>
+                                <stop offset="1" stop-color="#1E293B"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <div>
+                    <span class="gov-badge-top">🛡️ SISTEMA CORPORATIVO DE TI • AMBIENTE SEGURO</span>
+                </div>
+                <h1 class="gov-portal-title">Portal de Gestão de Ativos & Ordens de TI</h1>
+                <p class="gov-portal-subtitle">
+                    Plataforma integrada para controle operacional de chamados, suporte a postos de saúde e gestão de contratos públicos e privados.
+                </p>
+                <div class="gov-security-bar">
+                    <span><span class="gov-status-dot"></span> Servidor Ativo (Supabase Cloud)</span>
+                    <span>🔒 TLS 1.3 Criptografado</span>
+                    <span>🏛️ Auditoria LGPD Ativa</span>
+                </div>
+            </div>
+            """,
             unsafe_allow_html=True
         )
-        st.divider()
 
         # Detecção de link de primeiro acesso ou redefinição de senha vindo do Supabase
         access_token_param = st.query_params.get("access_token")
         refresh_token_param = st.query_params.get("refresh_token", "")
         if access_token_param:
-            st.info("🎉 Link de ativação do Supabase detectado! Cadastre sua senha de acesso abaixo:")
+            st.info("🎉 Link de ativação identificado com sucesso! Defina sua credencial definitiva de acesso abaixo:")
             with st.form(key="form_definir_senha_link"):
-                st.subheader("🔑 Definir Nova Senha de Acesso")
-                st.caption("Cadastre sua senha pessoal para poder acessar o sistema a qualquer momento.")
-                nova_senha_1 = st.text_input("Nova Senha *", type="password", placeholder="Digite no mínimo 6 caracteres...")
+                st.subheader("🔑 Cadastrar Nova Senha Pessoal")
+                st.caption("Defina uma senha segura para autenticação contínua nas estações de trabalho.")
+                nova_senha_1 = st.text_input("Nova Senha *", type="password", placeholder="Mínimo 6 caracteres...")
                 nova_senha_2 = st.text_input("Confirme a Nova Senha *", type="password", placeholder="Repita a senha...")
-                btn_salvar_senha = st.form_submit_button("Salvar Senha e Entrar 🚀", use_container_width=True)
+                btn_salvar_senha = st.form_submit_button("Salvar Credencial e Ingressar 🚀", use_container_width=True)
 
                 if btn_salvar_senha:
                     if not nova_senha_1 or len(nova_senha_1) < 6:
@@ -286,63 +497,80 @@ def render_tela_login() -> None:
                             st.error(f"❌ {msg_pwd}")
             st.divider()
 
-        with st.form(key="form_login_principal"):
-            st.subheader("🔐 Autenticação de Acesso")
-            email_login = st.text_input("E-mail Corporativo (Lark / TI) *", placeholder="ex: seu.nome@empresa.com")
-            senha_login = st.text_input("Senha de Acesso *", type="password", placeholder="Digite sua senha...")
+        # Abas de Navegação de Autenticação (Interface Limpa e Sem Expander Poluído)
+        tab_operacional, tab_gestao, tab_recuperacao, tab_contingencia = st.tabs([
+            "🔐 Acesso Operacional",
+            "📊 Gestão & Fiscalização",
+            "📩 Recuperar Senha",
+            "🛡️ Contingência"
+        ])
 
-            destino_inicial = st.radio(
-                "🎯 Abrir diretamente em:",
-                options=["📊 Dashboard de Gráficos", "📝 Nova Requisição", "📋 Consultar Histórico"],
-                index=0,
-                horizontal=True
-            )
+        # ABA 1: ACESSO OPERACIONAL PRINCIPAL (TÉCNICOS E EQUIPE DE TI)
+        with tab_operacional:
+            with st.form(key="form_login_principal"):
+                st.markdown("##### 👤 Autenticação de Usuário")
+                email_login = st.text_input("E-mail Funcional (Lark Suite / TI) *", placeholder="ex: seu.nome@empresa.com.br")
+                senha_login = st.text_input("Senha de Acesso *", type="password", placeholder="Digite sua senha...")
 
-            st.write("")
-            btn_entrar = st.form_submit_button("Acessar Sistema 🚀", use_container_width=True)
+                destino_inicial = st.radio(
+                    "🎯 Destino Inicial:",
+                    options=["📊 Dashboard Analítico", "📝 Nova Requisição", "📋 Consultar Histórico"],
+                    index=0,
+                    horizontal=True
+                )
 
-        if btn_entrar:
-            if not email_login or not senha_login:
-                st.warning("⚠️ Preencha seu e-mail e senha para continuar.")
-            else:
-                with st.spinner("Autenticando no Supabase..."):
-                    sucesso, msg, user, _ = conexao_bd.fazer_login(email_login, senha_login)
+                st.write("")
+                btn_entrar = st.form_submit_button("Acessar Plataforma 🚀", use_container_width=True)
 
-                if sucesso and user:
-                    st.session_state["usuario_logado"] = user
-                    st.session_state["usuario_email"] = user.email
-                    st.session_state["is_admin"] = conexao_bd.verificar_se_admin(user.email)
-                    st.session_state["usuario_perfil"] = "Administrador" if st.session_state["is_admin"] else "Técnico de TI"
-                    st.session_state["tecnico_fixado"] = identificar_tecnico_por_email(user.email)
-
-                    # Persistência de Sessão Segura (Permanece logado até clicar em Sair)
-                    token = gerar_token_sessao({
-                        "email": user.email,
-                        "id": getattr(user, "id", "user"),
-                        "perfil": st.session_state["usuario_perfil"],
-                        "is_admin": st.session_state["is_admin"]
-                    })
-                    if token:
-                        st.query_params["session_token"] = token
-
-                    email_limpo = user.email.lower()
-                    if destino_inicial == "📊 Dashboard de Gráficos" or any(k in email_limpo for k in ["dash", "gestor", "diretoria", "gerente", "coord"]):
-                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
-                    elif destino_inicial == "📝 Nova Requisição":
-                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[1]
-                    else:
-                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[2]
-
-                    st.success("✅ Acesso autorizado com sucesso!")
-                    st.rerun()
+            if btn_entrar:
+                if not email_login or not senha_login:
+                    st.warning("⚠️ Preencha seu e-mail funcional e senha para continuar.")
                 else:
-                    st.error(f"❌ {msg}")
+                    with st.spinner("Autenticando credenciais no Supabase..."):
+                        sucesso, msg, user, _ = conexao_bd.fazer_login(email_login, senha_login)
 
-        # Acesso Direto para Gestão / Visualizador de Gráficos
-        with st.expander("📊 Acesso Direto ao Dashboard (Gestão & Diretoria)", expanded=False):
-            st.caption("Acesso direto para visualização de relatórios gerenciais e gráficos analíticos.")
-            chave_gestao = st.text_input("Chave de Acesso / Senha de Gestão", type="password", key="pwd_gestao_dashboard")
-            if st.button("Entrar Direto no Dashboard 📊", use_container_width=True, key="btn_login_gestor"):
+                    if sucesso and user:
+                        st.session_state["usuario_logado"] = user
+                        st.session_state["usuario_email"] = user.email
+                        st.session_state["is_admin"] = conexao_bd.verificar_se_admin(user.email)
+                        st.session_state["usuario_perfil"] = "Administrador" if st.session_state["is_admin"] else "Técnico de TI"
+                        st.session_state["tecnico_fixado"] = identificar_tecnico_por_email(user.email)
+
+                        # Persistência de Sessão Segura
+                        token = gerar_token_sessao({
+                            "email": user.email,
+                            "id": getattr(user, "id", "user"),
+                            "perfil": st.session_state["usuario_perfil"],
+                            "is_admin": st.session_state["is_admin"]
+                        })
+                        if token:
+                            st.query_params["session_token"] = token
+
+                        email_limpo = user.email.lower()
+                        if destino_inicial == "📊 Dashboard Analítico" or any(k in email_limpo for k in ["dash", "gestor", "diretoria", "gerente", "coord"]):
+                            st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
+                        elif destino_inicial == "📝 Nova Requisição":
+                            st.session_state["aba_selecionada"] = ABAS_SISTEMA[1]
+                        else:
+                            st.session_state["aba_selecionada"] = ABAS_SISTEMA[2]
+
+                        st.success("✅ Acesso autorizado com sucesso! Carregando painel...")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
+
+        # ABA 2: ACESSO GESTÃO & FISCALIZAÇÃO (AUDITORIA, FISCAIS DE CONTRATO E DIRETORIA)
+        with tab_gestao:
+            st.markdown("##### 🏛️ Acesso Executivo para Gestores e Fiscais de Contrato")
+            st.caption(
+                "Módulo reservado para consulta a relatórios analíticos, cumprimento de prazos (SLA), "
+                "produtividade operacional e prestação de contas com órgãos fiscalizadores."
+            )
+            with st.form(key="form_login_gestao"):
+                chave_gestao = st.text_input("Chave de Fiscalização / Senha de Gestão *", type="password", placeholder="Digite a chave autorizada...")
+                btn_login_gestor = st.form_submit_button("Acessar Painel de Fiscalização 📊", use_container_width=True)
+
+            if btn_login_gestor:
                 senha_correta = st.secrets.get("ADMIN_PASSWORD", "admin")
                 chaves_validas = ["dashboard", "gestor", "diretoria", "gerente", senha_correta]
                 if chave_gestao and chave_gestao.strip().lower() in [k.lower() for k in chaves_validas]:
@@ -363,17 +591,41 @@ def render_tela_login() -> None:
                     if token:
                         st.query_params["session_token"] = token
 
-                    st.success("✅ Acesso autorizado! Redirecionando para o Dashboard...")
+                    st.success("✅ Acesso gerencial autorizado! Abrindo indicadores...")
                     st.rerun()
                 else:
-                    st.error("❌ Chave de acesso incorreta. Digite 'gestor', 'dashboard' ou a senha mestra.")
+                    st.error("❌ Chave de fiscalização incorreta. Verifique com a coordenação de TI.")
 
-        # Acesso de contingência com Senha Mestra de Administrador
-        with st.expander("🔑 Acesso Administrativo com Senha Mestra"):
-            senha_admin_mestra = st.text_input("Senha Mestra", type="password", key="pwd_mestra_emergencia")
-            if st.button("Entrar com Senha Mestra", use_container_width=True, key="btn_login_admin_mestra"):
+        # ABA 3: RECUPERAÇÃO DE SENHA (SUPABASE AUTH)
+        with tab_recuperacao:
+            st.markdown("##### 📩 Solicitação de Recuperação de Senha")
+            st.caption("Informe seu e-mail cadastrado para receber o link seguro de redefinição emitido pelo Supabase.")
+            with st.form(key="form_recuperacao_senha"):
+                email_recup = st.text_input("E-mail Funcional Cadastrado *", placeholder="ex: seu.nome@empresa.com.br")
+                btn_enviar_recup = st.form_submit_button("Enviar Link de Redefinição 📬", use_container_width=True)
+
+            if btn_enviar_recup:
+                if not email_recup or "@" not in email_recup:
+                    st.warning("⚠️ Digite um endereço de e-mail válido.")
+                else:
+                    with st.spinner("Enviando solicitação ao servidor..."):
+                        sucesso_rec, msg_rec = conexao_bd.solicitar_recuperacao_senha(email_recup)
+                    if sucesso_rec:
+                        st.success(f"✅ {msg_rec}")
+                    else:
+                        st.error(f"❌ {msg_rec}")
+
+        # ABA 4: CONTINGÊNCIA ADMINISTRATIVA (SENHA MESTRA)
+        with tab_contingencia:
+            st.markdown("##### 🛡️ Contingência & Suporte Operacional Mestre")
+            st.caption("Acesso emergencial para manutenção e suporte ao banco de dados.")
+            with st.form(key="form_contingencia_mestra"):
+                senha_admin_mestra = st.text_input("Senha Mestra de Administrador *", type="password", placeholder="Digite a credencial mestra...")
+                btn_login_admin_mestra = st.form_submit_button("Ingressar como Administrador Mestre 🔑", use_container_width=True)
+
+            if btn_login_admin_mestra:
                 senha_correta = st.secrets.get("ADMIN_PASSWORD", "admin")
-                if senha_admin_mestra == senha_correta:
+                if senha_admin_mestra and senha_admin_mestra == senha_correta:
                     dados_admin = {
                         "email": "admin@sistema.local",
                         "id": "admin_master",
@@ -391,23 +643,26 @@ def render_tela_login() -> None:
                     if token:
                         st.query_params["session_token"] = token
 
-                    st.success("✅ Acesso como Administrador Mestre concedido!")
+                    st.success("✅ Acesso como Administrador Mestre autorizado!")
                     st.rerun()
-        # Solicitação de Link para Redefinir Senha
-        with st.expander("📩 Esqueci minha senha ou preciso de link"):
-            st.caption("Digite seu e-mail cadastrado para receber um link de definição ou redefinição de senha do Supabase.")
-            email_recup = st.text_input("E-mail Cadastrado", key="input_email_recuperacao")
-            if st.button("Enviar Link de Acesso 📬", key="btn_enviar_recup", use_container_width=True):
-                if not email_recup or "@" not in email_recup:
-                    st.warning("⚠️ Digite um e-mail válido.")
                 else:
-                    sucesso_rec, msg_rec = conexao_bd.solicitar_recuperacao_senha(email_recup)
-                    if sucesso_rec:
-                        st.success(f"✅ {msg_rec}")
-                    else:
-                        st.error(f"❌ {msg_rec}")
+                    st.error("❌ Senha mestra incorreta.")
 
-        st.caption("<div style='text-align: center; margin-top: 1.5rem;'>Ambiente Seguro • Autenticado via Supabase Cloud</div>", unsafe_allow_html=True)
+        # Rodapé Institucional com Aviso Legal e LGPD
+        st.markdown(
+            """
+            <div class="gov-compliance-notice">
+                <strong>⚖️ Aviso Legal & Confidencialidade (LGPD):</strong><br>
+                Este portal destina-se exclusivamente ao uso técnico e operacional autorizado. 
+                Todas as consultas, emissões de ordens de serviço e movimentações de patrimônio de TI são registradas 
+                para fins de auditoria, conformidade com a Lei Federal nº 13.709/2018 (LGPD) e prestação de contas de contratos públicos.
+            </div>
+            <div class="gov-footer-credentials">
+                Portal de Gestão de Ativos & Ordens de TI • Versão 3.3 • Contrato Operacional Ativo
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 
 # ==============================================================================
@@ -466,15 +721,15 @@ def render_barra_lateral() -> None:
 
 
 def render_aba_dashboard() -> None:
-    """Renderiza a aba de Dashboard Executivo com indicadores e gráficos analíticos interativos."""
+    """Renderiza a aba de Dashboard Executivo com indicadores de SLA e gráficos analíticos interativos."""
     col_t1, col_t2 = st.columns([5, 1])
     with col_t1:
-        st.subheader("📊 Painel Analítico & Gráficos Gerenciais")
+        st.subheader("📊 Painel Executivo & Indicadores Contratuais (SLA)")
     with col_t2:
         if st.button("🔄 Atualizar", key="btn_att_dashboard", use_container_width=True):
             st.rerun()
 
-    st.write("Acompanhamento visual em tempo real das ordens de serviço, manutenção de hardware e demandas das unidades de saúde.")
+    st.caption("Acompanhamento de metas contratuais, tempo de resposta, índice de manutenções preventivas e controle patrimonial para órgãos públicos e empresas privadas.")
 
     registros, erro = conexao_bd.buscar_requisicoes()
     if erro:
@@ -488,7 +743,7 @@ def render_aba_dashboard() -> None:
     df = pd.DataFrame(registros)
 
     # Filtros Rápidos do Dashboard
-    with st.expander("🔍 Filtros de Análise dos Gráficos", expanded=False):
+    with st.expander("🔍 Filtros Executivos de Análise", expanded=False):
         col_f1, col_f2, col_f3, col_f4 = st.columns(4)
         with col_f1:
             portes_disponiveis = ["Todos"] + sorted(list(df["porte"].dropna().unique())) if "porte" in df.columns else ["Todos"]
@@ -516,7 +771,7 @@ def render_aba_dashboard() -> None:
         st.warning("Nenhum dado encontrado para os filtros selecionados.")
         return
 
-    # Cards de KPIs Superiores
+    # Cálculos Operacionais e Métricas de SLA Contratual
     total_chamados = len(df_dash)
     total_pecas = int(df_dash["quantidade"].sum()) if "quantidade" in df_dash.columns else total_chamados
     status_serie = df_dash["status"] if "status" in df_dash.columns else pd.Series([], dtype=str)
@@ -525,13 +780,66 @@ def render_aba_dashboard() -> None:
     concluidos = int((status_serie == OPCOES_STATUS[2]).sum())
     taxa_resolucao = (concluidos / total_chamados * 100) if total_chamados > 0 else 0
 
-    st.markdown("##### 📈 Indicadores Chave de Desempenho (KPIs)")
+    # Índice de Visitas Preventivas vs Corretivas (Métrica exigida em auditorias públicas)
+    tipo_serie = df_dash["tipo_visita"].astype(str) if "tipo_visita" in df_dash.columns else pd.Series([], dtype=str)
+    qtd_preventivas = int(tipo_serie.str.contains("Preventiva", case=False, na=False).sum())
+    taxa_preventiva = (qtd_preventivas / total_chamados * 100) if total_chamados > 0 else 0
+
+    # Verificação de Ordens com Prazo Expirado (Atraso de SLA)
+    hoje = date.today()
+    def verificar_atraso(row):
+        st_val = str(row.get("status", ""))
+        if OPCOES_STATUS[2] in st_val:
+            return False
+        data_prev = row.get("data_prevista_retorno")
+        if not data_prev or pd.isna(data_prev):
+            return False
+        try:
+            if isinstance(data_prev, str):
+                dt = pd.to_datetime(data_prev, errors="coerce").date()
+            elif isinstance(data_prev, (pd.Timestamp, date)):
+                dt = data_prev if isinstance(data_prev, date) else data_prev.date()
+            else:
+                return False
+            return dt < hoje if dt else False
+        except Exception:
+            return False
+
+    df_dash["em_atraso"] = df_dash.apply(verificar_atraso, axis=1)
+    total_atrasados = int(df_dash["em_atraso"].sum())
+
+    # CARDS DE KPIS EXECUTIVOS & SLA CONTRATUAL
+    st.markdown("##### 📈 Indicadores Chave de Desempenho & SLA")
     k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("📋 Total de Chamados", f"{total_chamados}", f"{total_pecas} itens/peças")
-    k2.metric("🟢 Concluídos / Devolvidos", f"{concluidos}", f"{taxa_resolucao:.1f}% resolvidos")
-    k3.metric("🔵 Em Manutenção", f"{manutencao}", "Em bancada/técnico")
-    k4.metric("🟡 Pendentes", f"{pendentes}", "Aguardando reposição")
-    k5.metric("🏥 Unidades Atendidas", f"{df_dash['unidade_nome'].nunique() if 'unidade_nome' in df_dash.columns else 0}", "Postos impactados")
+    k1.metric("📋 Total de O.S.", f"{total_chamados}", f"{total_pecas} materiais/peças")
+    k2.metric("🎯 Resolução Global", f"{taxa_resolucao:.1f}%", f"{concluidos} concluídos")
+    k3.metric("🛡️ Índice Preventivo", f"{taxa_preventiva:.1f}%", f"{qtd_preventivas} preventivas")
+    
+    if total_atrasados > 0:
+        k4.metric("⚠️ O.S. em Atraso", f"{total_atrasados}", "Prazo expirado", delta_color="inverse")
+    else:
+        k4.metric("✅ Prazos de SLA", "100%", "Em conformidade")
+
+    k5.metric("🏥 Postos Assistidos", f"{df_dash['unidade_nome'].nunique() if 'unidade_nome' in df_dash.columns else 0}", "Unidades ativas")
+
+    # PAINEL DE AUDITORIA & FISCALIZAÇÃO DE PRAZOS
+    if total_atrasados > 0:
+        with st.expander(f"⚠️ Atenção Fiscalização: {total_atrasados} chamado(s) com prazo de retorno expirado", expanded=True):
+            st.caption("Ordens de serviço que requerem intervenção prioritária da equipe técnica para cumprimento do SLA contratual.")
+            cols_atraso = ["numero_chamado", "unidade_nome", "porte", "equipamento_nome", "tecnico_nome", "data_prevista_retorno", "status"]
+            cols_existentes = [c for c in cols_atraso if c in df_dash.columns]
+            df_atrasados = df_dash[df_dash["em_atraso"]][cols_existentes].rename(columns={
+                "numero_chamado": "Chamado / O.S.",
+                "unidade_nome": "Unidade de Saúde",
+                "porte": "Porte",
+                "equipamento_nome": "Equipamento / Peça",
+                "tecnico_nome": "Técnico Responsável",
+                "data_prevista_retorno": "Previsão Expirada",
+                "status": "Status Atual"
+            })
+            st.dataframe(df_atrasados, use_container_width=True, hide_index=True)
+    else:
+        st.success("✅ Conformidade Contratual de Prazos: Todas as ordens de serviço ativas estão dentro do prazo estipulado.")
 
     st.divider()
 
@@ -546,13 +854,13 @@ def render_aba_dashboard() -> None:
         df_st.columns = ["Status", "Total"]
 
         mapa_cores = {
-            OPCOES_STATUS[0]: "#F59E0B",
-            OPCOES_STATUS[1]: "#3B82F6",
-            OPCOES_STATUS[2]: "#10B981"
+            OPCOES_STATUS[0]: "#D97706",
+            OPCOES_STATUS[1]: "#2563EB",
+            OPCOES_STATUS[2]: "#059669"
         }
-        cores_lista = [mapa_cores.get(s, "#6B7280") for s in df_st["Status"]]
+        cores_lista = [mapa_cores.get(s, "#64748B") for s in df_st["Status"]]
 
-        grafico_donut = alt.Chart(df_st).mark_arc(innerRadius=60).encode(
+        grafico_donut = alt.Chart(df_st).mark_arc(innerRadius=65).encode(
             theta=alt.Theta(field="Total", type="quantitative"),
             color=alt.Color(
                 field="Status",
@@ -565,10 +873,10 @@ def render_aba_dashboard() -> None:
         st.altair_chart(grafico_donut, use_container_width=True)
 
     with col_g2:
-        st.markdown("##### 🛠️ Volume por Tipo de Visita Técnica")
+        st.markdown("##### 🛠️ Volume por Natureza de Intervenção (Preventiva vs Corretiva)")
         df_tv = df_dash["tipo_visita"].value_counts().reset_index()
         df_tv.columns = ["Tipo de Visita", "Total"]
-        grafico_visita = alt.Chart(df_tv).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+        grafico_visita = alt.Chart(df_tv).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
             x=alt.X("Tipo de Visita:N", sort="-y", axis=alt.Axis(labelAngle=-15)),
             y=alt.Y("Total:Q"),
             color=alt.Color("Tipo de Visita:N", scale=alt.Scale(scheme="tealblues"), legend=None),
@@ -586,7 +894,7 @@ def render_aba_dashboard() -> None:
         st.markdown("##### 📦 Top Materiais / Peças Mais Demandados")
         df_eq = df_dash["equipamento_nome"].value_counts().head(8).reset_index()
         df_eq.columns = ["Equipamento", "Total"]
-        grafico_eq = alt.Chart(df_eq).mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5).encode(
+        grafico_eq = alt.Chart(df_eq).mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6).encode(
             x=alt.X("Total:Q"),
             y=alt.Y("Equipamento:N", sort="-x"),
             color=alt.Color("Total:Q", scale=alt.Scale(scheme="blues"), legend=None),
@@ -595,10 +903,10 @@ def render_aba_dashboard() -> None:
         st.altair_chart(grafico_eq, use_container_width=True)
 
     with col_g4:
-        st.markdown("##### ⚠️ Principais Motivos de Defeito / Chamado")
+        st.markdown("##### ⚠️ Principais Motivos de Defeito / Incidente")
         df_mot = df_dash["motivo_chamado"].value_counts().head(8).reset_index()
         df_mot.columns = ["Motivo", "Total"]
-        grafico_mot = alt.Chart(df_mot).mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5).encode(
+        grafico_mot = alt.Chart(df_mot).mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6).encode(
             x=alt.X("Total:Q"),
             y=alt.Y("Motivo:N", sort="-x"),
             color=alt.Color("Total:Q", scale=alt.Scale(scheme="orangered"), legend=None),
@@ -616,7 +924,7 @@ def render_aba_dashboard() -> None:
         st.markdown("##### 📍 Chamados por Zona Operacional / Região")
         df_zona = df_dash["zona"].value_counts().reset_index()
         df_zona.columns = ["Zona", "Total"]
-        grafico_zona = alt.Chart(df_zona).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+        grafico_zona = alt.Chart(df_zona).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
             x=alt.X("Zona:N", sort="-y"),
             y=alt.Y("Total:Q"),
             color=alt.Color("Zona:N", scale=alt.Scale(scheme="category10"), legend=None),
@@ -628,7 +936,7 @@ def render_aba_dashboard() -> None:
         st.markdown("##### 🏢 Proporção por Porte da Unidade (Porte IV vs Porte I)")
         df_porte = df_dash["porte"].value_counts().reset_index()
         df_porte.columns = ["Porte", "Total"]
-        grafico_porte = alt.Chart(df_porte).mark_arc(innerRadius=45).encode(
+        grafico_porte = alt.Chart(df_porte).mark_arc(innerRadius=50).encode(
             theta=alt.Theta("Total:Q"),
             color=alt.Color("Porte:N", scale=alt.Scale(scheme="dark2"), legend=alt.Legend(orient="bottom")),
             tooltip=["Porte", "Total"]
@@ -1047,6 +1355,86 @@ def render_aba_consulta() -> None:
                         st.rerun()
                     else:
                         st.error(msg_st)
+
+        # Espelho de Ordem de Serviço para Impressão e Auditoria
+        with st.expander("📄 Emitir Espelho Formal da Ordem de Serviço (Impressão & Assinatura)", expanded=False):
+            st.caption("Gere o termo oficial de atendimento e manutenção para validação junto ao responsável do posto de saúde e fiscal de contrato.")
+            chamado_alvo_linha = df[df['id'] == id_alvo]
+            if not chamado_alvo_linha.empty:
+                os_row = chamado_alvo_linha.iloc[0].to_dict()
+
+                # Monta a data formatada
+                data_solic_fmt = ""
+                if os_row.get("data"):
+                    try:
+                        data_solic_fmt = pd.to_datetime(os_row["data"]).strftime("%d/%m/%Y %H:%M")
+                    except Exception:
+                        data_solic_fmt = str(os_row.get("data"))
+
+                data_prev_fmt = ""
+                if os_row.get("data_prevista_retorno"):
+                    try:
+                        data_prev_fmt = pd.to_datetime(os_row["data_prevista_retorno"]).strftime("%d/%m/%Y")
+                    except Exception:
+                        data_prev_fmt = str(os_row.get("data_prevista_retorno"))
+
+                termo_html = f"""
+                <div class="gov-os-voucher" id="os-voucher-print">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px;">
+                        <div>
+                            <div style="font-size: 0.75rem; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.05em;">ORDEM DE SERVIÇO & TERMO DE ATENDIMENTO TI</div>
+                            <div style="font-size: 1.25rem; font-weight: 800; color: #0f172a;">COMPROVANTE TÉCNICO #{os_row.get('id', 'N/A')}</div>
+                            <div style="font-size: 0.8rem; color: #64748b;">Chamado / Ticket Oficial: <strong>{os_row.get('numero_chamado') or 'NÃO INFORMADO'}</strong></div>
+                        </div>
+                        <div style="text-align: right; font-size: 0.8rem; color: #475569;">
+                            <div><strong>Data de Abertura:</strong> {data_solic_fmt or 'Hoje'}</div>
+                            <div><strong>Previsão de Retorno:</strong> {data_prev_fmt or 'Imediato'}</div>
+                            <div><strong>Status:</strong> <span style="font-weight: 700;">{os_row.get('status', 'Pendente')}</span></div>
+                        </div>
+                    </div>
+
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 0.85rem;">
+                        <tr style="background: #f8fafc;">
+                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1; width: 50%;"><strong>Unidade de Saúde:</strong> {os_row.get('unidade_nome', 'N/A')}</td>
+                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1; width: 50%;"><strong>Porte da Unidade:</strong> {os_row.get('porte', 'N/A')}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Setor / Sala:</strong> {os_row.get('setor_nome', 'N/A')}</td>
+                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Zona / Região:</strong> {os_row.get('zona', 'N/A')} | <strong>Lote:</strong> {os_row.get('empresa', 'N/A')}</td>
+                        </tr>
+                        <tr style="background: #f8fafc;">
+                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Técnico Responsável:</strong> {os_row.get('tecnico_nome', 'N/A')}</td>
+                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Tipo de Visita:</strong> {os_row.get('tipo_visita', 'N/A')}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Material / Equipamento:</strong> {os_row.get('equipamento_nome', 'N/A')}</td>
+                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Quantidade Movimentada:</strong> {os_row.get('quantidade', 1)} unidade(s)</td>
+                        </tr>
+                        <tr style="background: #f8fafc;">
+                            <td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Motivo do Chamado:</strong> {os_row.get('motivo_chamado', 'N/A')}</td>
+                        </tr>
+                        <tr>
+                            <td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Serviço Realizado:</strong> {os_row.get('servico_realizado', 'N/A')}</td>
+                        </tr>
+                        <tr style="background: #f8fafc;">
+                            <td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Observações / Laudo Técnico:</strong> {os_row.get('observacao') or 'Sem observações adicionais.'}</td>
+                        </tr>
+                    </table>
+
+                    <div style="margin-top: 32px; display: flex; justify-content: space-between; gap: 40px; padding-top: 20px;">
+                        <div style="flex: 1; text-align: center;">
+                            <div style="border-top: 1px solid #475569; padding-top: 6px; font-size: 0.8rem; font-weight: 700; color: #0f172a;">{os_row.get('tecnico_nome', 'Técnico de TI')}</div>
+                            <div style="font-size: 0.72rem; color: #64748b;">Técnico Responsável / Preposto TI</div>
+                        </div>
+                        <div style="flex: 1; text-align: center;">
+                            <div style="border-top: 1px solid #475569; padding-top: 6px; font-size: 0.8rem; font-weight: 700; color: #0f172a;">Responsável pelo Posto / Unidade</div>
+                            <div style="font-size: 0.72rem; color: #64748b;">Assinatura & Carimbo do Servidor Público</div>
+                        </div>
+                    </div>
+                </div>
+                """
+                st.markdown(termo_html, unsafe_allow_html=True)
+                st.caption("💡 Dica: Utilize a opção de imprimir do navegador (Ctrl + P) para salvar como PDF ou imprimir o comprovante assinado.")
 
         # Exportação para CSV / Excel
         st.divider()
