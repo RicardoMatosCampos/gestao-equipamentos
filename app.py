@@ -49,7 +49,7 @@ st.set_page_config(
     page_title=APP_TITLE,
     page_icon=APP_ICON,
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"
 )
 
 
@@ -263,7 +263,139 @@ def aplicar_estilos_customizados() -> None:
                     border-color: #1e293b;
                 }
             }
+
+            /* ========================================================= */
+            /* RESPONSIVIDADE MOBILE & TABLET (TOUCH-FRIENDLY & USABILIDADE) */
+            /* ========================================================= */
+            @media (max-width: 768px) {
+                /* Previne zoom automático do iOS Safari ao focar campos */
+                input, select, textarea {
+                    font-size: 16px !important;
+                }
+
+                /* Sidebar Otimizada para Celular */
+                section[data-testid="stSidebar"] {
+                    width: 88vw !important;
+                    max-width: 320px !important;
+                    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.25) !important;
+                }
+
+                /* Botões da barra lateral no celular: altura mínima de 48px e toque confortável */
+                section[data-testid="stSidebar"] div.stButton > button {
+                    min-height: 48px !important;
+                    height: auto !important;
+                    font-size: 0.95rem !important;
+                    padding: 0.75rem 1rem !important;
+                    margin-bottom: 8px !important;
+                    border-radius: 8px !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: flex-start !important;
+                    text-align: left !important;
+                    touch-action: manipulation !important;
+                    -webkit-tap-highlight-color: transparent !important;
+                }
+
+                section[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
+                    background: #0284c7 !important;
+                    color: #ffffff !important;
+                    font-weight: 700 !important;
+                    border: 1px solid #0369a1 !important;
+                    box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3) !important;
+                }
+
+                /* Botão do menu hamburguer em destaque para fácil toque */
+                button[data-testid="stSidebarCollapseButton"],
+                [data-testid="stSidebarHeader"] button {
+                    padding: 10px !important;
+                    min-width: 44px !important;
+                    min-height: 44px !important;
+                    border-radius: 8px !important;
+                }
+
+                /* Colunas adaptáveis no Celular: evita colunas esmagadas em linha */
+                div[data-testid="stHorizontalBlock"] {
+                    flex-wrap: wrap !important;
+                    gap: 10px !important;
+                }
+
+                div[data-testid="column"] {
+                    min-width: 48% !important;
+                    flex: 1 1 48% !important;
+                    margin-bottom: 6px !important;
+                }
+
+                div[data-testid="column"]:empty {
+                    display: none !important;
+                }
+
+                /* Métricas e KPIs no celular em 2 colunas legíveis */
+                div[data-testid="stMetricValue"] {
+                    font-size: 1.45rem !important;
+                }
+
+                /* Formulários e botões principais com toque suave */
+                div.stButton > button:first-child,
+                button[kind="primaryFormSubmit"] {
+                    min-height: 48px !important;
+                    font-size: 0.95rem !important;
+                    padding: 0.75rem 1.25rem !important;
+                    touch-action: manipulation !important;
+                }
+
+                /* Login container ajustado para tela cheia mobile */
+                .gov-login-header {
+                    padding: 0.75rem 0.25rem !important;
+                }
+                .gov-portal-title {
+                    font-size: 1.35rem !important;
+                }
+                .gov-security-bar {
+                    gap: 8px !important;
+                    font-size: 0.72rem !important;
+                    padding: 6px 10px !important;
+                }
+                div[data-testid="stForm"] {
+                    padding: 1rem !important;
+                }
+            }
         </style>
+
+        <script>
+        (function() {
+            function inicializarAutoCloseSidebarMobile() {
+                if (window.innerWidth <= 768) {
+                    const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]') 
+                                 || document.querySelector('section[data-testid="stSidebar"]');
+                    if (!sidebar) return;
+                    
+                    const buttons = sidebar.querySelectorAll('button');
+                    buttons.forEach(function(btn) {
+                        if (!btn.dataset.mobileListenerAttached) {
+                            btn.dataset.mobileListenerAttached = "true";
+                            btn.addEventListener('click', function() {
+                                setTimeout(function() {
+                                    const closeBtn = window.parent.document.querySelector('button[data-testid="stSidebarCollapseButton"]')
+                                                  || window.parent.document.querySelector('section[data-testid="stSidebar"] button[kind="header"]')
+                                                  || document.querySelector('button[data-testid="stSidebarCollapseButton"]');
+                                    if (closeBtn) {
+                                        closeBtn.click();
+                                    }
+                                }, 250);
+                            });
+                        }
+                    });
+                }
+            }
+
+            if (document.readyState === 'complete') {
+                inicializarAutoCloseSidebarMobile();
+            } else {
+                window.addEventListener('load', inicializarAutoCloseSidebarMobile);
+            }
+            setInterval(inicializarAutoCloseSidebarMobile, 1000);
+        })();
+        </script>
         """,
         unsafe_allow_html=True
     )
@@ -700,9 +832,17 @@ def render_barra_lateral() -> None:
 
         st.divider()
         st.subheader("📌 Navegação Rápida")
-        for aba_nome in ABAS_SISTEMA:
-            if st.button(aba_nome, key=f"side_nav_{aba_nome}", use_container_width=True):
+        is_admin = bool(st.session_state.get("is_admin", False))
+        abas_permitidas = ABAS_SISTEMA if is_admin else [aba for aba in ABAS_SISTEMA if "Admin" not in aba]
+        aba_atual_side = st.session_state.get("aba_selecionada", abas_permitidas[0])
+
+        for aba_nome in abas_permitidas:
+            is_ativa = (aba_atual_side == aba_nome)
+            tipo_btn = "primary" if is_ativa else "secondary"
+            btn_label = f"▶ {aba_nome}" if is_ativa else aba_nome
+            if st.button(btn_label, key=f"side_nav_{aba_nome}", use_container_width=True, type=tipo_btn):
                 st.session_state["aba_selecionada"] = aba_nome
+                st.session_state["nav_segmented_abas"] = aba_nome
                 st.rerun()
 
         st.divider()
@@ -1767,20 +1907,29 @@ def main() -> None:
         aba_selecionada_atual = abas_permitidas[0]
         st.session_state["aba_selecionada"] = aba_selecionada_atual
 
+    # Sincroniza segmented_control com a aba selecionada pela barra lateral
+    if "nav_segmented_abas" not in st.session_state or st.session_state["nav_segmented_abas"] not in abas_permitidas:
+        st.session_state["nav_segmented_abas"] = aba_selecionada_atual
+    elif st.session_state["nav_segmented_abas"] != aba_selecionada_atual:
+        st.session_state["nav_segmented_abas"] = aba_selecionada_atual
+
+    def on_change_segmented() -> None:
+        sel = st.session_state.get("nav_segmented_abas")
+        if sel:
+            st.session_state["aba_selecionada"] = sel
+
     # Barra Superior de Navegação Dinâmica entre Abas
-    aba_atual = st.segmented_control(
+    st.segmented_control(
         "Navegação Principal",
         options=abas_permitidas,
         default=aba_selecionada_atual,
         selection_mode="single",
         label_visibility="collapsed",
-        key="nav_segmented_abas"
+        key="nav_segmented_abas",
+        on_change=on_change_segmented
     )
 
-    if aba_atual:
-        st.session_state["aba_selecionada"] = aba_atual
-    else:
-        aba_atual = st.session_state.get("aba_selecionada", abas_permitidas[0])
+    aba_atual = st.session_state.get("aba_selecionada", abas_permitidas[0])
 
     st.write("")
 
