@@ -457,6 +457,11 @@ def buscar_requisicoes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
                 d["tecnico_nome"] = t.get("nome") or ""
                 d["equipamento_nome"] = eq.get("nome") or ""
 
+                d["tecnico_assinatura"] = t.get("assinatura") or ""
+                d["unidade_assinatura"] = u.get("assinatura_responsavel") or ""
+                d["unidade_resp_nome"] = u.get("nome_responsavel") or ""
+                d["unidade_resp_cargo"] = u.get("cargo_responsavel") or ""
+
                 # Valores padrão seguros para garantir robustez no dashboard
                 d["data"] = d.get("data") or d.get("data_criacao") or ""
                 d["status"] = d.get("status") or "🟡 Pendente / Aguardando Peça"
@@ -643,3 +648,205 @@ def admin_excluir_usuario(user_id: str) -> Tuple[bool, str]:
         return True, "Usuário removido com sucesso do Supabase Auth!"
     except Exception as exc:
         return False, f"Erro ao remover usuário: {str(exc)}"
+
+
+# ==============================================================================
+# GESTÃO DE ASSINATURA DIGITAL (TÉCNICOS E PREPOSTOS)
+# ==============================================================================
+
+ARQUIVO_ASSINATURAS = "assinaturas.json"
+
+
+def salvar_assinatura(chave: str, b64_data_uri: str) -> bool:
+    """
+    Grava a assinatura digital (Data URI Base64) vinculada ao técnico/usuário.
+    Persiste no arquivo local assinaturas.json para permanência definitiva no sistema.
+    """
+    if not chave or not b64_data_uri:
+        return False
+    try:
+        import os
+        caminho = os.path.join(os.path.dirname(__file__), ARQUIVO_ASSINATURAS)
+        dados: Dict[str, Any] = {}
+        if os.path.exists(caminho):
+            try:
+                with open(caminho, "r", encoding="utf-8") as f:
+                    dados = json.load(f)
+            except Exception:
+                dados = {}
+        dados[chave.strip().lower()] = b64_data_uri
+        with open(caminho, "w", encoding="utf-8") as f:
+            json.dump(dados, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception:
+        return False
+
+
+def carregar_assinatura(chave: str) -> Optional[str]:
+    """
+    Recupera a assinatura digital armazenada para o técnico ou chamado.
+    """
+    if not chave:
+        return None
+    try:
+        import os
+        caminho = os.path.join(os.path.dirname(__file__), ARQUIVO_ASSINATURAS)
+        if os.path.exists(caminho):
+            with open(caminho, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+            return dados.get(chave.strip().lower())
+    except Exception:
+        return None
+    return None
+
+
+def remover_assinatura(chave: str) -> bool:
+    """
+    Remove uma assinatura digital armazenada.
+    """
+    if not chave:
+        return False
+    try:
+        import os
+        caminho = os.path.join(os.path.dirname(__file__), ARQUIVO_ASSINATURAS)
+        if os.path.exists(caminho):
+            with open(caminho, "r", encoding="utf-8") as f:
+                dados = json.load(f)
+            k = chave.strip().lower()
+            if k in dados:
+                del dados[k]
+                with open(caminho, "w", encoding="utf-8") as f:
+                    json.dump(dados, f, ensure_ascii=False, indent=2)
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def buscar_assinatura_multiplas_chaves(chaves: List[str]) -> Optional[str]:
+    """
+    Busca uma assinatura válida tentando sequencialmente uma lista de chaves (nome, e-mail, etc.).
+    """
+    for k in chaves:
+        if k:
+            sig = carregar_assinatura(k)
+            if sig:
+                return sig
+    return None
+
+
+def salvar_assinatura_tecnico_db(tecnico_id: int, b64_assinatura: str, nome: Optional[str] = None) -> Tuple[bool, str]:
+    """Salva a assinatura digital vinculada ao técnico no Supabase e no arquivo local."""
+    try:
+        chaves = [f"tecnico_{tecnico_id}"]
+        if nome:
+            chaves.append(nome)
+        for k in chaves:
+            salvar_assinatura(k, b64_assinatura)
+
+        try:
+            supabase = iniciar_conexao()
+            supabase.table(TABLE_TECNICOS).update({"assinatura": b64_assinatura}).eq("id", tecnico_id).execute()
+        except Exception:
+            pass
+
+        return True, "Assinatura do técnico salva com sucesso no sistema!"
+    except Exception as exc:
+        return False, f"Erro ao salvar assinatura: {str(exc)}"
+
+
+def carregar_assinatura_tecnico_db(tecnico_id: Optional[int], nome: Optional[str] = None) -> Optional[str]:
+    """Recupera a assinatura do técnico do Supabase ou do cache do sistema."""
+    chaves = []
+    if tecnico_id:
+        chaves.append(f"tecnico_{tecnico_id}")
+    if nome:
+        chaves.append(nome)
+
+    if tecnico_id:
+        try:
+            supabase = iniciar_conexao()
+            res = supabase.table(TABLE_TECNICOS).select("assinatura").eq("id", tecnico_id).execute()
+            if res.data and res.data[0].get("assinatura"):
+                return res.data[0]["assinatura"]
+        except Exception:
+            pass
+
+    return buscar_assinatura_multiplas_chaves(chaves)
+
+
+def salvar_assinatura_unidade_db(
+    unidade_id: int,
+    b64_assinatura: str,
+    nome_unidade: Optional[str] = None,
+    nome_responsavel: Optional[str] = None,
+    cargo_responsavel: Optional[str] = None
+) -> Tuple[bool, str]:
+    """Salva a assinatura/carimbo e dados do responsável da unidade no Supabase e no cache local."""
+    try:
+        chaves = [f"unidade_{unidade_id}"]
+        if nome_unidade:
+            chaves.append(nome_unidade)
+        for k in chaves:
+            salvar_assinatura(k, b64_assinatura)
+            if nome_responsavel:
+                salvar_assinatura(f"{k}_resp_nome", nome_responsavel)
+            if cargo_responsavel:
+                salvar_assinatura(f"{k}_resp_cargo", cargo_responsavel)
+
+        try:
+            supabase = iniciar_conexao()
+            payload: Dict[str, Any] = {"assinatura_responsavel": b64_assinatura}
+            if nome_responsavel:
+                payload["nome_responsavel"] = nome_responsavel
+            if cargo_responsavel:
+                payload["cargo_responsavel"] = cargo_responsavel
+            supabase.table(TABLE_UNIDADES).update(payload).eq("id", unidade_id).execute()
+        except Exception:
+            pass
+
+        return True, "Assinatura e carimbo da unidade gravados com sucesso no sistema!"
+    except Exception as exc:
+        return False, f"Erro ao salvar assinatura da unidade: {str(exc)}"
+
+
+def carregar_assinatura_unidade_db(unidade_id: Optional[int], nome_unidade: Optional[str] = None) -> Dict[str, Optional[str]]:
+    """Recupera a assinatura, nome e cargo do responsável da unidade vinculada."""
+    resultado: Dict[str, Optional[str]] = {"assinatura": None, "nome_responsavel": None, "cargo_responsavel": None}
+    chaves = []
+    if unidade_id:
+        chaves.append(f"unidade_{unidade_id}")
+    if nome_unidade:
+        chaves.append(nome_unidade)
+
+    if unidade_id:
+        try:
+            supabase = iniciar_conexao()
+            res = supabase.table(TABLE_UNIDADES).select("assinatura_responsavel, nome_responsavel, cargo_responsavel").eq("id", unidade_id).execute()
+            if res.data and res.data[0]:
+                row = res.data[0]
+                if row.get("assinatura_responsavel"):
+                    resultado["assinatura"] = row["assinatura_responsavel"]
+                if row.get("nome_responsavel"):
+                    resultado["nome_responsavel"] = row["nome_responsavel"]
+                if row.get("cargo_responsavel"):
+                    resultado["cargo_responsavel"] = row["cargo_responsavel"]
+        except Exception:
+            pass
+
+    if not resultado["assinatura"]:
+        resultado["assinatura"] = buscar_assinatura_multiplas_chaves(chaves)
+    if not resultado["nome_responsavel"] and chaves:
+        for k in chaves:
+            v = carregar_assinatura(f"{k}_resp_nome")
+            if v:
+                resultado["nome_responsavel"] = v
+                break
+    if not resultado["cargo_responsavel"] and chaves:
+        for k in chaves:
+            v = carregar_assinatura(f"{k}_resp_cargo")
+            if v:
+                resultado["cargo_responsavel"] = v
+                break
+
+    return resultado

@@ -12,10 +12,12 @@ import hmac
 import importlib
 import json
 import time
+import textwrap
 from typing import Dict, Any, List, Optional
 import altair as alt
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 import conexao_bd
 
@@ -237,19 +239,26 @@ def aplicar_estilos_customizados() -> None:
             }
 
             @media print {
+                header, footer, [data-testid="stSidebar"], [data-testid="stToolbar"], [data-testid="stDecoration"], .stApp > header {
+                    display: none !important;
+                }
                 body * {
-                    visibility: hidden;
+                    visibility: hidden !important;
                 }
                 #os-voucher-print, #os-voucher-print * {
-                    visibility: visible;
+                    visibility: visible !important;
                 }
                 #os-voucher-print {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    width: 100%;
-                    border: none;
-                    box-shadow: none;
+                    position: absolute !important;
+                    left: 0 !important;
+                    top: 0 !important;
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 16px !important;
+                    border: 1px solid #cbd5e1 !important;
+                    box-shadow: none !important;
+                    background: #ffffff !important;
+                    color: #0f172a !important;
                 }
             }
 
@@ -355,18 +364,43 @@ def aplicar_estilos_customizados() -> None:
                     font-size: 0.72rem !important;
                     padding: 6px 10px !important;
                 }
-                div[data-testid="stForm"] {
-                    padding: 1rem !important;
+                div[data-baseweb="select"] input {
+                    -webkit-user-select: text !important;
+                    user-select: text !important;
+                    pointer-events: auto !important;
+                    cursor: text !important;
+                }
+                div[data-baseweb="select"] {
+                    touch-action: manipulation !important;
                 }
             }
-        </style>
 
+            /* Oculta o container do componente HTML de suporte sem interromper o script */
+            iframe[title="streamlit.components.v1.html"],
+            div[data-testid="stCustomComponentV1"] {
+                position: absolute !important;
+                width: 0 !important;
+                height: 0 !important;
+                border: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                overflow: hidden !important;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Executa o script de usabilidade mobile via iframe que acessa o DOM principal
+    components.html(
+        """
         <script>
         (function() {
+            const parentDoc = window.parent.document || document;
+
             function inicializarAutoCloseSidebarMobile() {
                 if (window.innerWidth <= 768) {
-                    const sidebar = window.parent.document.querySelector('section[data-testid="stSidebar"]') 
-                                 || document.querySelector('section[data-testid="stSidebar"]');
+                    const sidebar = parentDoc.querySelector('section[data-testid="stSidebar"]');
                     if (!sidebar) return;
                     
                     const buttons = sidebar.querySelectorAll('button');
@@ -375,9 +409,8 @@ def aplicar_estilos_customizados() -> None:
                             btn.dataset.mobileListenerAttached = "true";
                             btn.addEventListener('click', function() {
                                 setTimeout(function() {
-                                    const closeBtn = window.parent.document.querySelector('button[data-testid="stSidebarCollapseButton"]')
-                                                  || window.parent.document.querySelector('section[data-testid="stSidebar"] button[kind="header"]')
-                                                  || document.querySelector('button[data-testid="stSidebarCollapseButton"]');
+                                    const closeBtn = parentDoc.querySelector('button[data-testid="stSidebarCollapseButton"]')
+                                                  || parentDoc.querySelector('section[data-testid="stSidebar"] button[kind="header"]');
                                     if (closeBtn) {
                                         closeBtn.click();
                                     }
@@ -388,16 +421,93 @@ def aplicar_estilos_customizados() -> None:
                 }
             }
 
-            if (document.readyState === 'complete') {
-                inicializarAutoCloseSidebarMobile();
-            } else {
-                window.addEventListener('load', inicializarAutoCloseSidebarMobile);
+            // Permite digitação nos campos selectbox / combobox no celular
+            function desbloquearDigitacaoSelectMobile() {
+                try {
+                    const inputs = parentDoc.querySelectorAll('div[data-baseweb="select"] input');
+                    inputs.forEach(function(inp) {
+                        if (inp.hasAttribute('readonly') || inp.readOnly) {
+                            inp.removeAttribute('readonly');
+                            inp.readOnly = false;
+                        }
+                        if (inp.getAttribute('inputmode') === 'none' || !inp.hasAttribute('inputmode')) {
+                            inp.setAttribute('inputmode', 'search');
+                        }
+                        inp.setAttribute('autocomplete', 'off');
+                        inp.style.pointerEvents = 'auto';
+                        inp.style.userSelect = 'text';
+                        inp.style.webkitUserSelect = 'text';
+
+                        if (!inp.dataset.touchFixed) {
+                            inp.dataset.touchFixed = "true";
+                            
+                            const unlock = function() {
+                                inp.removeAttribute('readonly');
+                                inp.readOnly = false;
+                                inp.setAttribute('inputmode', 'search');
+                                setTimeout(function() {
+                                    inp.removeAttribute('readonly');
+                                    inp.readOnly = false;
+                                    inp.focus();
+                                }, 60);
+                            };
+
+                            inp.addEventListener('touchstart', unlock, { passive: true });
+                            inp.addEventListener('pointerdown', unlock, { passive: true });
+                            inp.addEventListener('focus', unlock);
+                        }
+                    });
+                } catch(e) {}
             }
+
+            // Intercepta toques no próprio container do selectbox
+            parentDoc.addEventListener('touchstart', function(e) {
+                const selectContainer = e.target.closest('div[data-baseweb="select"]');
+                if (selectContainer) {
+                    const inp = selectContainer.querySelector('input');
+                    if (inp) {
+                        inp.removeAttribute('readonly');
+                        inp.readOnly = false;
+                        inp.setAttribute('inputmode', 'search');
+                        setTimeout(function() {
+                            inp.removeAttribute('readonly');
+                            inp.readOnly = false;
+                            inp.focus();
+                        }, 80);
+                    }
+                }
+            }, { capture: true, passive: true });
+
+            parentDoc.addEventListener('pointerdown', function(e) {
+                const selectContainer = e.target.closest('div[data-baseweb="select"]');
+                if (selectContainer) {
+                    const inp = selectContainer.querySelector('input');
+                    if (inp) {
+                        inp.removeAttribute('readonly');
+                        inp.readOnly = false;
+                        inp.setAttribute('inputmode', 'search');
+                    }
+                }
+            }, { capture: true, passive: true });
+
+            // Observador de mutações para novos selects adicionados
+            try {
+                const observer = new MutationObserver(function() {
+                    desbloquearDigitacaoSelectMobile();
+                    inicializarAutoCloseSidebarMobile();
+                });
+                observer.observe(parentDoc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['readonly', 'inputmode'] });
+            } catch(e) {}
+
+            setInterval(desbloquearDigitacaoSelectMobile, 400);
             setInterval(inicializarAutoCloseSidebarMobile, 1000);
+            desbloquearDigitacaoSelectMobile();
+            inicializarAutoCloseSidebarMobile();
         })();
         </script>
         """,
-        unsafe_allow_html=True
+        height=0,
+        width=0
     )
 
 
@@ -509,6 +619,22 @@ def identificar_tecnico_por_email(email: Optional[str]) -> Optional[Dict[str, An
         return None
 
 
+def obter_perfil_e_abas(email: Optional[str], is_admin: bool) -> Tuple[str, List[str]]:
+    """
+    Retorna a descrição do perfil de acesso e a lista de abas autorizadas.
+    Usuários que tenham 'dash', 'gestor', 'fiscal' ou 'diretor' no e-mail/usuário
+    possuem acesso EXCLUSIVO ao Dashboard analítico para auditoria e acompanhamento.
+    """
+    if is_admin:
+        return "Administrador", ABAS_SISTEMA
+
+    em = (email or "").strip().lower()
+    if any(k in em for k in ["dash", "gestor", "fiscal", "diretor", "visualizador", "painel"]):
+        return "Gestor / Visualizador (Dashboard Executivo)", [ABAS_SISTEMA[0]]
+
+    return "Técnico de TI", [aba for aba in ABAS_SISTEMA if "Admin" not in aba]
+
+
 def inicializar_sessao() -> None:
     """Garante que as variáveis de estado de sessão estejam inicializadas e restaura login persistente."""
     if "usuario_logado" not in st.session_state:
@@ -531,10 +657,15 @@ def inicializar_sessao() -> None:
             dados_usuario = validar_token_sessao(token_sessao)
             if dados_usuario:
                 st.session_state["usuario_logado"] = dados_usuario
-                st.session_state["usuario_email"] = dados_usuario.get("email")
-                st.session_state["usuario_perfil"] = dados_usuario.get("perfil", "Técnico de TI")
-                st.session_state["is_admin"] = dados_usuario.get("is_admin", False)
-                st.session_state["tecnico_fixado"] = identificar_tecnico_por_email(dados_usuario.get("email"))
+                email_usr = dados_usuario.get("email")
+                is_adm = dados_usuario.get("is_admin", False)
+                perfil_usr, abas_usr = obter_perfil_e_abas(email_usr, is_adm)
+                st.session_state["usuario_email"] = email_usr
+                st.session_state["usuario_perfil"] = perfil_usr
+                st.session_state["is_admin"] = is_adm
+                st.session_state["tecnico_fixado"] = identificar_tecnico_por_email(email_usr)
+                if len(abas_usr) == 1:
+                    st.session_state["aba_selecionada"] = abas_usr[0]
 
 
 # ==============================================================================
@@ -629,156 +760,62 @@ def render_tela_login() -> None:
                             st.error(f"❌ {msg_pwd}")
             st.divider()
 
-        # Abas de Navegação de Autenticação (Interface Limpa e Sem Expander Poluído)
-        tab_operacional, tab_gestao, tab_recuperacao, tab_contingencia = st.tabs([
-            "🔐 Acesso Operacional",
-            "📊 Gestão & Fiscalização",
-            "📩 Recuperar Senha",
-            "🛡️ Contingência"
-        ])
+        # Formulário Unificado de Autenticação Corporativa (Seguro e Institucional)
+        with st.form(key="form_login_principal"):
+            st.markdown("##### 👤 Autenticação de Usuário")
+            email_login = st.text_input("E-mail Funcional (Lark Suite / TI) *", placeholder="ex: seu.nome@empresa.com.br")
+            senha_login = st.text_input("Senha de Acesso *", type="password", placeholder="Digite sua senha...")
 
-        # ABA 1: ACESSO OPERACIONAL PRINCIPAL (TÉCNICOS E EQUIPE DE TI)
-        with tab_operacional:
-            with st.form(key="form_login_principal"):
-                st.markdown("##### 👤 Autenticação de Usuário")
-                email_login = st.text_input("E-mail Funcional (Lark Suite / TI) *", placeholder="ex: seu.nome@empresa.com.br")
-                senha_login = st.text_input("Senha de Acesso *", type="password", placeholder="Digite sua senha...")
-
-                destino_inicial = st.radio(
-                    "🎯 Destino Inicial:",
-                    options=["📊 Dashboard Analítico", "📝 Nova Requisição", "📋 Consultar Histórico"],
-                    index=0,
-                    horizontal=True
-                )
-
-                st.write("")
-                btn_entrar = st.form_submit_button("Acessar Plataforma 🚀", use_container_width=True)
-
-            if btn_entrar:
-                if not email_login or not senha_login:
-                    st.warning("⚠️ Preencha seu e-mail funcional e senha para continuar.")
-                else:
-                    with st.spinner("Autenticando credenciais no Supabase..."):
-                        sucesso, msg, user, _ = conexao_bd.fazer_login(email_login, senha_login)
-
-                    if sucesso and user:
-                        st.session_state["usuario_logado"] = user
-                        st.session_state["usuario_email"] = user.email
-                        st.session_state["is_admin"] = conexao_bd.verificar_se_admin(user.email)
-                        st.session_state["usuario_perfil"] = "Administrador" if st.session_state["is_admin"] else "Técnico de TI"
-                        st.session_state["tecnico_fixado"] = identificar_tecnico_por_email(user.email)
-
-                        # Persistência de Sessão Segura
-                        token = gerar_token_sessao({
-                            "email": user.email,
-                            "id": getattr(user, "id", "user"),
-                            "perfil": st.session_state["usuario_perfil"],
-                            "is_admin": st.session_state["is_admin"]
-                        })
-                        if token:
-                            st.query_params["session_token"] = token
-
-                        email_limpo = user.email.lower()
-                        if destino_inicial == "📊 Dashboard Analítico" or any(k in email_limpo for k in ["dash", "gestor", "diretoria", "gerente", "coord"]):
-                            st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
-                        elif destino_inicial == "📝 Nova Requisição":
-                            st.session_state["aba_selecionada"] = ABAS_SISTEMA[1]
-                        else:
-                            st.session_state["aba_selecionada"] = ABAS_SISTEMA[2]
-
-                        st.success("✅ Acesso autorizado com sucesso! Carregando painel...")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {msg}")
-
-        # ABA 2: ACESSO GESTÃO & FISCALIZAÇÃO (AUDITORIA, FISCAIS DE CONTRATO E DIRETORIA)
-        with tab_gestao:
-            st.markdown("##### 🏛️ Acesso Executivo para Gestores e Fiscais de Contrato")
-            st.caption(
-                "Módulo reservado para consulta a relatórios analíticos, cumprimento de prazos (SLA), "
-                "produtividade operacional e prestação de contas com órgãos fiscalizadores."
+            destino_inicial = st.radio(
+                "🎯 Destino Inicial:",
+                options=["📊 Dashboard Analítico", "📝 Nova Requisição", "📋 Consultar Histórico"],
+                index=0,
+                horizontal=True
             )
-            with st.form(key="form_login_gestao"):
-                chave_gestao = st.text_input("Chave de Fiscalização / Senha de Gestão *", type="password", placeholder="Digite a chave autorizada...")
-                btn_login_gestor = st.form_submit_button("Acessar Painel de Fiscalização 📊", use_container_width=True)
 
-            if btn_login_gestor:
-                senha_correta = st.secrets.get("ADMIN_PASSWORD", "admin")
-                chaves_validas = ["dashboard", "gestor", "diretoria", "gerente", senha_correta]
-                if chave_gestao and chave_gestao.strip().lower() in [k.lower() for k in chaves_validas]:
-                    dados_gestor = {
-                        "email": "gestao.ti@saude.gov.br",
-                        "id": "gestor_dashboard",
-                        "perfil": "Gestor / Visualizador",
-                        "is_admin": False
-                    }
-                    st.session_state["usuario_logado"] = dados_gestor
-                    st.session_state["usuario_email"] = dados_gestor["email"]
-                    st.session_state["usuario_perfil"] = dados_gestor["perfil"]
-                    st.session_state["is_admin"] = False
-                    st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
-                    st.session_state["tecnico_fixado"] = None
+            st.write("")
+            btn_entrar = st.form_submit_button("Acessar Plataforma 🚀", use_container_width=True)
 
-                    token = gerar_token_sessao(dados_gestor)
+        if btn_entrar:
+            if not email_login or not senha_login:
+                st.warning("⚠️ Preencha seu e-mail funcional e senha para continuar.")
+            else:
+                with st.spinner("Autenticando credenciais no Supabase..."):
+                    sucesso, msg, user, _ = conexao_bd.fazer_login(email_login, senha_login)
+
+                if sucesso and user:
+                    st.session_state["usuario_logado"] = user
+                    st.session_state["usuario_email"] = user.email
+                    st.session_state["is_admin"] = conexao_bd.verificar_se_admin(user.email)
+                    perfil_calc, abas_calc = obter_perfil_e_abas(user.email, st.session_state["is_admin"])
+                    st.session_state["usuario_perfil"] = perfil_calc
+                    st.session_state["tecnico_fixado"] = identificar_tecnico_por_email(user.email)
+
+                    # Persistência de Sessão Segura
+                    token = gerar_token_sessao({
+                        "email": user.email,
+                        "id": getattr(user, "id", "user"),
+                        "perfil": st.session_state["usuario_perfil"],
+                        "is_admin": st.session_state["is_admin"]
+                    })
                     if token:
                         st.query_params["session_token"] = token
 
-                    st.success("✅ Acesso gerencial autorizado! Abrindo indicadores...")
-                    st.rerun()
-                else:
-                    st.error("❌ Chave de fiscalização incorreta. Verifique com a coordenação de TI.")
-
-        # ABA 3: RECUPERAÇÃO DE SENHA (SUPABASE AUTH)
-        with tab_recuperacao:
-            st.markdown("##### 📩 Solicitação de Recuperação de Senha")
-            st.caption("Informe seu e-mail cadastrado para receber o link seguro de redefinição emitido pelo Supabase.")
-            with st.form(key="form_recuperacao_senha"):
-                email_recup = st.text_input("E-mail Funcional Cadastrado *", placeholder="ex: seu.nome@empresa.com.br")
-                btn_enviar_recup = st.form_submit_button("Enviar Link de Redefinição 📬", use_container_width=True)
-
-            if btn_enviar_recup:
-                if not email_recup or "@" not in email_recup:
-                    st.warning("⚠️ Digite um endereço de e-mail válido.")
-                else:
-                    with st.spinner("Enviando solicitação ao servidor..."):
-                        sucesso_rec, msg_rec = conexao_bd.solicitar_recuperacao_senha(email_recup)
-                    if sucesso_rec:
-                        st.success(f"✅ {msg_rec}")
+                    if len(abas_calc) == 1:
+                        st.session_state["aba_selecionada"] = abas_calc[0]
+                    elif destino_inicial == "📊 Dashboard Analítico":
+                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
+                    elif destino_inicial == "📝 Nova Requisição":
+                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[1]
                     else:
-                        st.error(f"❌ {msg_rec}")
+                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[2]
 
-        # ABA 4: CONTINGÊNCIA ADMINISTRATIVA (SENHA MESTRA)
-        with tab_contingencia:
-            st.markdown("##### 🛡️ Contingência & Suporte Operacional Mestre")
-            st.caption("Acesso emergencial para manutenção e suporte ao banco de dados.")
-            with st.form(key="form_contingencia_mestra"):
-                senha_admin_mestra = st.text_input("Senha Mestra de Administrador *", type="password", placeholder="Digite a credencial mestra...")
-                btn_login_admin_mestra = st.form_submit_button("Ingressar como Administrador Mestre 🔑", use_container_width=True)
-
-            if btn_login_admin_mestra:
-                senha_correta = st.secrets.get("ADMIN_PASSWORD", "admin")
-                if senha_admin_mestra and senha_admin_mestra == senha_correta:
-                    dados_admin = {
-                        "email": "admin@sistema.local",
-                        "id": "admin_master",
-                        "perfil": "Administrador",
-                        "is_admin": True
-                    }
-                    st.session_state["usuario_logado"] = dados_admin
-                    st.session_state["usuario_email"] = dados_admin["email"]
-                    st.session_state["usuario_perfil"] = dados_admin["perfil"]
-                    st.session_state["is_admin"] = True
-                    st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
-                    st.session_state["tecnico_fixado"] = None
-
-                    token = gerar_token_sessao(dados_admin)
-                    if token:
-                        st.query_params["session_token"] = token
-
-                    st.success("✅ Acesso como Administrador Mestre autorizado!")
+                    st.success("✅ Acesso autorizado com sucesso! Carregando painel...")
                     st.rerun()
                 else:
-                    st.error("❌ Senha mestra incorreta.")
+                    st.error(f"❌ {msg}")
+
+        st.caption("🔒 Acesso restrito a profissionais autorizados. Para novo cadastro ou redefinição de acesso, contate o Administrador de TI.")
 
         # Rodapé Institucional com Aviso Legal e LGPD
         st.markdown(
@@ -818,6 +855,43 @@ def render_barra_lateral() -> None:
         tec_fixo = st.session_state.get("tecnico_fixado")
         if tec_fixo:
             st.caption(f"👨‍💻 Técnico Vinculado: **{tec_fixo.get('nome')}**")
+
+        # Gerenciamento de Assinatura Digital do Técnico
+        with st.expander("✍️ Minha Assinatura Digital", expanded=False):
+            email_atual = st.session_state.get("usuario_email", "")
+            tec_id_fixo = tec_fixo.get("id") if tec_fixo else None
+            nome_tec = tec_fixo.get("nome", "") if tec_fixo else ""
+            sig_atual = conexao_bd.carregar_assinatura_tecnico_db(tec_id_fixo, nome_tec) or conexao_bd.carregar_assinatura(email_atual)
+
+            if sig_atual:
+                st.image(sig_atual, caption=f"Assinatura Salva ({nome_tec or email_atual})", use_container_width=True)
+                if st.button("🗑️ Excluir Minha Assinatura", key="btn_del_sig_sidebar", use_container_width=True):
+                    if tec_id_fixo:
+                        conexao_bd.salvar_assinatura_tecnico_db(tec_id_fixo, "", nome_tec)
+                    conexao_bd.remover_assinatura(email_atual)
+                    if nome_tec:
+                        conexao_bd.remover_assinatura(nome_tec)
+                    st.success("Assinatura removida com sucesso.")
+                    st.rerun()
+
+            upload_sig = st.file_uploader(
+                "Carregar Nova Imagem (PNG/JPG):",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="upload_sig_sidebar",
+                help="Carregue sua assinatura digitalizada. Ela ficará vinculada ao seu usuário para assinar suas O.S. digitalmente."
+            )
+            if upload_sig:
+                raw_sig = upload_sig.read()
+                mime = upload_sig.type or "image/png"
+                b64_sig = f"data:{mime};base64,{base64.b64encode(raw_sig).decode('utf-8')}"
+                if tec_id_fixo:
+                    conexao_bd.salvar_assinatura_tecnico_db(tec_id_fixo, b64_sig, nome_tec)
+                if email_atual:
+                    conexao_bd.salvar_assinatura(email_atual, b64_sig)
+                if nome_tec:
+                    conexao_bd.salvar_assinatura(nome_tec, b64_sig)
+                st.success("✅ Assinatura gravada e vinculada com sucesso!")
+                st.rerun()
 
         if st.button("🚪 Sair / Desconectar", use_container_width=True):
             conexao_bd.fazer_logout()
@@ -1317,6 +1391,11 @@ def render_aba_nova_requisicao() -> None:
                 st.error(f"❌ {mensagem}")
 
 
+def limpar_filtro_pesquisa_rapida() -> None:
+    """Callback seguro executado antes da instanciação de widgets para evitar StreamlitAPIException."""
+    st.session_state["filtro_pesquisa_rapida_texto"] = ""
+
+
 def render_aba_consulta() -> None:
     """Renderiza a visualização de histórico, métricas analíticas e atualização de status."""
     col_t1, col_t2 = st.columns([5, 1])
@@ -1401,33 +1480,72 @@ def render_aba_consulta() -> None:
 
         st.divider()
 
-        # Filtros de Consulta
-        st.markdown("##### 🔍 Filtros de Consulta")
-        f1, f2, f3, f4, f5, f6 = st.columns(6)
-        with f1:
-            filtro_status = st.selectbox("Status:", ["Todos"] + OPCOES_STATUS)
-        with f2:
-            portes_disponiveis = ["Todos"] + sorted(list(df["porte"].dropna().unique())) if "porte" in df.columns else ["Todos"]
-            filtro_porte = st.selectbox("Porte:", portes_disponiveis)
-        with f3:
-            col_u = "unidade_nome" if "unidade_nome" in df.columns else "unidade"
-            unis_disp = ["Todas"] + sorted(list(df[col_u].dropna().unique())) if col_u in df.columns else ["Todas"]
-            filtro_unidade = st.selectbox("Unidade:", unis_disp)
-        with f4:
-            col_s = "setor_nome" if "setor_nome" in df.columns else "setor"
-            set_disp = ["Todos"] + sorted(list(df[col_s].dropna().unique())) if col_s in df.columns else ["Todos"]
-            filtro_setor = st.selectbox("Setor:", set_disp)
-        with f5:
-            col_t = "tecnico_nome" if "tecnico_nome" in df.columns else "tecnico_responsavel"
-            tecs_disp = ["Todos"] + sorted(list(df[col_t].dropna().unique())) if col_t in df.columns else ["Todos"]
-            filtro_tecnico = st.selectbox("Técnico:", tecs_disp)
-        with f6:
-            col_eq = "equipamento_nome" if "equipamento_nome" in df.columns else "item_solicitado"
-            eqs_disp = ["Todos"] + sorted(list(df[col_eq].dropna().unique())) if col_eq in df.columns else ["Todos"]
-            filtro_item = st.selectbox("Material:", eqs_disp)
+        # Filtros de Consulta e Busca Rápida por Digitação
+        st.markdown("##### 🔍 Pesquisa e Filtros de Atendimentos")
+
+        # Campo de Digitação Direta (100% nativo para Celular e Computador)
+        col_busca_txt, col_btn_limpar = st.columns([5, 1])
+        with col_busca_txt:
+            termo_pesquisa = st.text_input(
+                "🔎 Digite para Buscar no Celular ou Computador:",
+                placeholder="Digite o nome da Unidade, Técnico, Material, Número do Chamado ou Setor...",
+                key="filtro_pesquisa_rapida_texto"
+            )
+        with col_btn_limpar:
+            st.write("")
+            st.write("")
+            st.button(
+                "Limpar 🔄",
+                key="btn_limpar_busca_rapida",
+                on_click=limpar_filtro_pesquisa_rapida,
+                use_container_width=True,
+                help="Limpa o campo de busca e restaura todos os chamados."
+            )
+
+        # Filtros específicos por categoria (Dropdowns)
+        with st.expander("⚙️ Filtros Avançados por Categoria (Status, Unidade, Técnico, etc.)", expanded=False):
+            f1, f2, f3 = st.columns(3)
+            with f1:
+                filtro_status = st.selectbox("Status:", ["Todos"] + OPCOES_STATUS, key="f_cons_status")
+            with f2:
+                portes_disponiveis = ["Todos"] + sorted(list(df["porte"].dropna().unique())) if "porte" in df.columns else ["Todos"]
+                filtro_porte = st.selectbox("Porte:", portes_disponiveis, key="f_cons_porte")
+            with f3:
+                col_u = "unidade_nome" if "unidade_nome" in df.columns else "unidade"
+                unis_disp = ["Todas"] + sorted(list(df[col_u].dropna().unique())) if col_u in df.columns else ["Todas"]
+                filtro_unidade = st.selectbox("Unidade de Saúde:", unis_disp, key="f_cons_uni")
+
+            f4, f5, f6 = st.columns(3)
+            with f4:
+                col_s = "setor_nome" if "setor_nome" in df.columns else "setor"
+                set_disp = ["Todos"] + sorted(list(df[col_s].dropna().unique())) if col_s in df.columns else ["Todos"]
+                filtro_setor = st.selectbox("Setor / Sala:", set_disp, key="f_cons_set")
+            with f5:
+                col_t = "tecnico_nome" if "tecnico_nome" in df.columns else "tecnico_responsavel"
+                tecs_disp = ["Todos"] + sorted(list(df[col_t].dropna().unique())) if col_t in df.columns else ["Todos"]
+                filtro_tecnico = st.selectbox("Técnico:", tecs_disp, key="f_cons_tec")
+            with f6:
+                col_eq = "equipamento_nome" if "equipamento_nome" in df.columns else "item_solicitado"
+                eqs_disp = ["Todos"] + sorted(list(df[col_eq].dropna().unique())) if col_eq in df.columns else ["Todos"]
+                filtro_item = st.selectbox("Material / Peça:", eqs_disp, key="f_cons_eq")
 
         # Aplica filtros em cascata
         df_filtrado = df.copy()
+
+        # 1. Filtro por digitação textual livre (Funciona nativamente no celular)
+        if termo_pesquisa and termo_pesquisa.strip():
+            termo_limpo = termo_pesquisa.strip().lower()
+            colunas_busca = [
+                "id", "numero_chamado", "unidade_nome", "setor_nome", "tecnico_nome",
+                "equipamento_nome", "motivo_chamado", "observacao", "status", "porte", "zona"
+            ]
+            cols_ativas = [c for c in colunas_busca if c in df_filtrado.columns]
+            mascara = pd.Series(False, index=df_filtrado.index)
+            for c in cols_ativas:
+                mascara = mascara | df_filtrado[c].astype(str).str.lower().str.contains(termo_limpo, na=False)
+            df_filtrado = df_filtrado[mascara]
+
+        # 2. Filtros de categoria
         if filtro_status != "Todos" and "status" in df_filtrado.columns:
             df_filtrado = df_filtrado[df_filtrado["status"] == filtro_status]
         if filtro_porte != "Todos" and "porte" in df_filtrado.columns:
@@ -1471,10 +1589,13 @@ def render_aba_consulta() -> None:
         col_sel_id, col_sel_st, col_btn_st = st.columns([4, 3, 2])
 
         with col_sel_id:
+            base_chamados = df_filtrado if not df_filtrado.empty else df
             opcoes_chamados = {
                 f"Protocolo #{row['id']} | {row.get('unidade_nome', '')} ({row.get('setor_nome', '')}) - {row.get('equipamento_nome', '')}": row['id']
-                for _, row in df.iterrows()
+                for _, row in base_chamados.iterrows()
             }
+            if not opcoes_chamados:
+                opcoes_chamados = {f"Protocolo #{row['id']}": row['id'] for _, row in df.iterrows()}
             chamado_selecionado = st.selectbox("Selecione a Requisição:", list(opcoes_chamados.keys()))
             id_alvo = opcoes_chamados[chamado_selecionado]
 
@@ -1503,6 +1624,55 @@ def render_aba_consulta() -> None:
             if not chamado_alvo_linha.empty:
                 os_row = chamado_alvo_linha.iloc[0].to_dict()
 
+                # Identificação e busca relacional da Assinatura Digital do Técnico
+                tecnico_nome_os = os_row.get('tecnico_nome', '')
+                tecnico_id_os = os_row.get('tecnico_id')
+                assinatura_tec_b64 = os_row.get('tecnico_assinatura') or conexao_bd.carregar_assinatura_tecnico_db(tecnico_id_os, tecnico_nome_os)
+
+                # Identificação e busca relacional do Carimbo / Responsável da Unidade vinculada
+                unidade_nome_os = os_row.get('unidade_nome', '')
+                unidade_id_os = os_row.get('unidade_id')
+                dados_uni_os = conexao_bd.carregar_assinatura_unidade_db(unidade_id_os, unidade_nome_os)
+                assinatura_unidade_b64 = os_row.get('unidade_assinatura') or dados_uni_os.get("assinatura")
+                nome_resp_unidade = os_row.get('unidade_resp_nome') or dados_uni_os.get("nome_responsavel") or "Responsável pelo Posto / Unidade"
+                cargo_resp_unidade = os_row.get('unidade_resp_cargo') or dados_uni_os.get("cargo_responsavel") or "Servidor Público • Recebimento"
+
+                # Painel de Status das Assinaturas Digitais Vinculadas
+                with st.expander("✍️ Assinaturas Digitais do Documento", expanded=False):
+                    col_sig_tec, col_sig_uni = st.columns(2)
+                    with col_sig_tec:
+                        st.markdown(f"###### 👨‍💻 Assinatura do Técnico: `{tecnico_nome_os or 'Técnico de TI'}`")
+                        if assinatura_tec_b64:
+                            st.image(assinatura_tec_b64, caption=f"Assinatura vinculada a {tecnico_nome_os}", width=150)
+                            aplicar_sig_tec = st.checkbox(
+                                "Incluir Assinatura Digital do Técnico no Comprovante",
+                                value=True,
+                                key=f"chk_sig_tec_{id_alvo}"
+                            )
+                        else:
+                            st.info("ℹ️ Nenhuma assinatura digital cadastrada para este técnico.")
+                            st.caption("A assinatura oficial de cada técnico é cadastrada pelo Administrador na aba de Cadastros.")
+                            aplicar_sig_tec = False
+
+                    with col_sig_uni:
+                        st.markdown(f"###### 🏥 Carimbo & Responsável: `{unidade_nome_os or 'Posto de Saúde'}`")
+                        st.write(f"**Responsável:** {nome_resp_unidade}")
+                        st.write(f"**Cargo / Função:** {cargo_resp_unidade}")
+                        if assinatura_unidade_b64:
+                            st.image(assinatura_unidade_b64, caption=f"Carimbo Oficial • {unidade_nome_os}", width=150)
+                            aplicar_sig_uni = st.checkbox(
+                                "Incluir Carimbo da Unidade no Comprovante",
+                                value=True,
+                                key=f"chk_sig_uni_{id_alvo}"
+                            )
+                        else:
+                            st.info("ℹ️ Nenhum carimbo cadastrado ainda para este posto de saúde.")
+                            st.caption("O carimbo e responsável são configurados pelo Administrador no cadastro de Unidades.")
+                            aplicar_sig_uni = False
+
+                    if st.session_state.get("is_admin"):
+                        st.caption("🛡️ **Painel Administrador:** As assinaturas de técnicos e carimbos de postos de saúde são gerenciados centralmente na aba **⚙️ Gestão de Cadastros**.")
+
                 # Monta a data formatada
                 data_solic_fmt = ""
                 if os_row.get("data"):
@@ -1518,63 +1688,208 @@ def render_aba_consulta() -> None:
                     except Exception:
                         data_prev_fmt = str(os_row.get("data_prevista_retorno"))
 
-                termo_html = f"""
-                <div class="gov-os-voucher" id="os-voucher-print">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px;">
-                        <div>
-                            <div style="font-size: 0.75rem; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.05em;">ORDEM DE SERVIÇO & TERMO DE ATENDIMENTO TI</div>
-                            <div style="font-size: 1.25rem; font-weight: 800; color: #0f172a;">COMPROVANTE TÉCNICO #{os_row.get('id', 'N/A')}</div>
-                            <div style="font-size: 0.8rem; color: #64748b;">Chamado / Ticket Oficial: <strong>{os_row.get('numero_chamado') or 'NÃO INFORMADO'}</strong></div>
-                        </div>
-                        <div style="text-align: right; font-size: 0.8rem; color: #475569;">
-                            <div><strong>Data de Abertura:</strong> {data_solic_fmt or 'Hoje'}</div>
-                            <div><strong>Previsão de Retorno:</strong> {data_prev_fmt or 'Imediato'}</div>
-                            <div><strong>Status:</strong> <span style="font-weight: 700;">{os_row.get('status', 'Pendente')}</span></div>
-                        </div>
-                    </div>
+                # Blocos visuais de assinatura digital formatados
+                if aplicar_sig_tec and assinatura_tec_b64:
+                    bloco_sig_tec = f'<div style="min-height: 72px; height: 75px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 2px;"><img src="{assinatura_tec_b64}" style="max-height: 70px; max-width: 260px; object-fit: contain;" /></div>'
+                    selo_sig_tec = '<div style="font-size: 0.65rem; color: #0284c7; font-weight: 700; margin-top: 3px;">🔒 Documento Assinado Digitalmente • Preposto TI</div>'
+                else:
+                    bloco_sig_tec = '<div style="min-height: 72px; height: 75px;"></div>'
+                    selo_sig_tec = ''
 
-                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 0.85rem;">
-                        <tr style="background: #f8fafc;">
-                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1; width: 50%;"><strong>Unidade de Saúde:</strong> {os_row.get('unidade_nome', 'N/A')}</td>
-                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1; width: 50%;"><strong>Porte da Unidade:</strong> {os_row.get('porte', 'N/A')}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Setor / Sala:</strong> {os_row.get('setor_nome', 'N/A')}</td>
-                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Zona / Região:</strong> {os_row.get('zona', 'N/A')} | <strong>Lote:</strong> {os_row.get('empresa', 'N/A')}</td>
-                        </tr>
-                        <tr style="background: #f8fafc;">
-                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Técnico Responsável:</strong> {os_row.get('tecnico_nome', 'N/A')}</td>
-                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Tipo de Visita:</strong> {os_row.get('tipo_visita', 'N/A')}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Material / Equipamento:</strong> {os_row.get('equipamento_nome', 'N/A')}</td>
-                            <td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Quantidade Movimentada:</strong> {os_row.get('quantidade', 1)} unidade(s)</td>
-                        </tr>
-                        <tr style="background: #f8fafc;">
-                            <td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Motivo do Chamado:</strong> {os_row.get('motivo_chamado', 'N/A')}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Serviço Realizado:</strong> {os_row.get('servico_realizado', 'N/A')}</td>
-                        </tr>
-                        <tr style="background: #f8fafc;">
-                            <td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Observações / Laudo Técnico:</strong> {os_row.get('observacao') or 'Sem observações adicionais.'}</td>
-                        </tr>
-                    </table>
+                if aplicar_sig_uni and assinatura_unidade_b64:
+                    bloco_sig_uni = f'<div style="min-height: 72px; height: 75px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 2px;"><img src="{assinatura_unidade_b64}" style="max-height: 70px; max-width: 260px; object-fit: contain;" /></div>'
+                    selo_sig_uni = '<div style="font-size: 0.65rem; color: #16a34a; font-weight: 700; margin-top: 3px;">✅ Recebimento Validado na Unidade</div>'
+                else:
+                    bloco_sig_uni = '<div style="min-height: 72px; height: 75px;"></div>'
+                    selo_sig_uni = ''
 
-                    <div style="margin-top: 32px; display: flex; justify-content: space-between; gap: 40px; padding-top: 20px;">
-                        <div style="flex: 1; text-align: center;">
-                            <div style="border-top: 1px solid #475569; padding-top: 6px; font-size: 0.8rem; font-weight: 700; color: #0f172a;">{os_row.get('tecnico_nome', 'Técnico de TI')}</div>
-                            <div style="font-size: 0.72rem; color: #64748b;">Técnico Responsável / Preposto TI</div>
-                        </div>
-                        <div style="flex: 1; text-align: center;">
-                            <div style="border-top: 1px solid #475569; padding-top: 6px; font-size: 0.8rem; font-weight: 700; color: #0f172a;">Responsável pelo Posto / Unidade</div>
-                            <div style="font-size: 0.72rem; color: #64748b;">Assinatura & Carimbo do Servidor Público</div>
-                        </div>
-                    </div>
-                </div>
-                """
+                termo_html = f"""<div class="gov-os-voucher" id="os-voucher-print">
+<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px;">
+<div>
+<div style="font-size: 0.75rem; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.05em;">ORDEM DE SERVIÇO &amp; TERMO DE ATENDIMENTO TI</div>
+<div style="font-size: 1.25rem; font-weight: 800; color: #0f172a;">COMPROVANTE TÉCNICO #{os_row.get('id', 'N/A')}</div>
+<div style="font-size: 0.8rem; color: #64748b;">Chamado / Ticket Oficial: <strong>{os_row.get('numero_chamado') or 'NÃO INFORMADO'}</strong></div>
+</div>
+<div style="text-align: right; font-size: 0.8rem; color: #475569;">
+<div><strong>Data de Abertura:</strong> {data_solic_fmt or 'Hoje'}</div>
+<div><strong>Previsão de Retorno:</strong> {data_prev_fmt or 'Imediato'}</div>
+<div><strong>Status:</strong> <span style="font-weight: 700;">{os_row.get('status', 'Pendente')}</span></div>
+</div>
+</div>
+<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 0.85rem;">
+<tr style="background: #f8fafc;">
+<td style="padding: 8px 12px; border: 1px solid #cbd5e1; width: 50%;"><strong>Unidade de Saúde:</strong> {os_row.get('unidade_nome', 'N/A')}</td>
+<td style="padding: 8px 12px; border: 1px solid #cbd5e1; width: 50%;"><strong>Porte da Unidade:</strong> {os_row.get('porte', 'N/A')}</td>
+</tr>
+<tr>
+<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Setor / Sala:</strong> {os_row.get('setor_nome', 'N/A')}</td>
+<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Zona / Região:</strong> {os_row.get('zona', 'N/A')} | <strong>Lote:</strong> {os_row.get('empresa', 'N/A')}</td>
+</tr>
+<tr style="background: #f8fafc;">
+<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Técnico Responsável:</strong> {os_row.get('tecnico_nome', 'N/A')}</td>
+<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Tipo de Visita:</strong> {os_row.get('tipo_visita', 'N/A')}</td>
+</tr>
+<tr>
+<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Material / Equipamento:</strong> {os_row.get('equipamento_nome', 'N/A')}</td>
+<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Quantidade Movimentada:</strong> {os_row.get('quantidade', 1)} unidade(s)</td>
+</tr>
+<tr style="background: #f8fafc;">
+<td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Motivo do Chamado:</strong> {os_row.get('motivo_chamado', 'N/A')}</td>
+</tr>
+<tr>
+<td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Serviço Realizado:</strong> {os_row.get('servico_realizado', 'N/A')}</td>
+</tr>
+<tr style="background: #f8fafc;">
+<td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Observações / Laudo Técnico:</strong> {os_row.get('observacao') or 'Sem observações adicionais.'}</td>
+</tr>
+</table>
+<div style="margin-top: 32px; display: flex; justify-content: space-between; gap: 40px; padding-top: 20px;">
+<div style="flex: 1; text-align: center;">
+{bloco_sig_tec}
+<div style="border-top: 1.5px solid #334155; padding-top: 6px; font-size: 0.85rem; font-weight: 700; color: #0f172a;">{tecnico_nome_os or 'Técnico de TI'}</div>
+<div style="font-size: 0.72rem; color: #64748b;">Técnico Responsável / Preposto TI</div>
+{selo_sig_tec}
+</div>
+<div style="flex: 1; text-align: center;">
+{bloco_sig_uni}
+<div style="border-top: 1.5px solid #334155; padding-top: 6px; font-size: 0.85rem; font-weight: 700; color: #0f172a;">{nome_resp_unidade}</div>
+<div style="font-size: 0.72rem; color: #64748b;">{cargo_resp_unidade} • {os_row.get('unidade_nome', 'Posto de Trabalho')}</div>
+{selo_sig_uni}
+</div>
+</div>
+</div>"""
                 st.markdown(termo_html, unsafe_allow_html=True)
-                st.caption("💡 Dica: Utilize a opção de imprimir do navegador (Ctrl + P) para salvar como PDF ou imprimir o comprovante assinado.")
+
+                # Monta a página HTML completa para download / impressão
+                nome_arq_limpo = f"comprovante_os_{os_row.get('id', 'N/A')}_{str(os_row.get('unidade_nome', 'TI')).replace(' ', '_')}.html"
+                doc_html_completo = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ordem de Serviço #{os_row.get('id', 'N/A')} - {os_row.get('unidade_nome', 'TI')}</title>
+<style>
+@page {{ size: A4 portrait; margin: 10mm 15mm; }}
+* {{ box-sizing: border-box; }}
+body {{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #f8fafc;
+    color: #0f172a;
+    margin: 0;
+    padding: 20px;
+}}
+.folha-a4 {{
+    max-width: 860px;
+    margin: 0 auto;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+}}
+.barra-acoes {{
+    max-width: 860px;
+    margin: 0 auto 16px auto;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}}
+.btn-acao {{
+    background: #0284c7;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(2,132,199,0.3);
+}}
+.btn-acao:hover {{ background: #0369a1; }}
+@media print {{
+    body {{ background: #ffffff !important; padding: 0 !important; margin: 0 !important; }}
+    .barra-acoes {{ display: none !important; }}
+    .folha-a4 {{ border: none !important; box-shadow: none !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; }}
+}}
+</style>
+</head>
+<body>
+<div class="barra-acoes">
+    <button class="btn-acao" onclick="window.print()">🖨️ Imprimir Agora (Ctrl + P)</button>
+</div>
+<div class="folha-a4">
+{termo_html}
+</div>
+</body>
+</html>"""
+
+                st.write("")
+                col_btn_print1, col_btn_print2 = st.columns(2)
+                with col_btn_print1:
+                    st.download_button(
+                        label="📥 Baixar Comprovante Oficial (.html / PDF)",
+                        data=doc_html_completo.encode("utf-8"),
+                        file_name=nome_arq_limpo,
+                        mime="text/html",
+                        use_container_width=True,
+                        key=f"btn_download_os_{id_alvo}",
+                        help="Baixa o documento oficial formatado para abrir no navegador ou salvar diretamente como PDF."
+                    )
+
+                with col_btn_print2:
+                    js_popup_impressao = f"""
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%;">
+                        <button onclick="imprimirComprovanteDireto()" style="
+                            width: 100%;
+                            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+                            color: white;
+                            border: none;
+                            padding: 10px 16px;
+                            border-radius: 8px;
+                            font-size: 0.95rem;
+                            font-weight: 700;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 8px;
+                            box-shadow: 0 2px 5px rgba(2, 132, 199, 0.3);
+                        ">
+                            🖨️ Imprimir Ordem de Serviço Direto
+                        </button>
+                    </div>
+                    <script>
+                    function imprimirComprovanteDireto() {{
+                        try {{
+                            var el = window.parent.document.getElementById('os-voucher-print');
+                            if (!el) {{
+                                window.parent.print();
+                                return;
+                            }}
+                            var w = window.open('', '_blank', 'width=880,height=800');
+                            w.document.write('<!DOCTYPE html><html><head><title>Ordem de Serviço #{os_row.get('id', 'N/A')}</title>');
+                            w.document.write('<style>');
+                            w.document.write('@page {{ size: A4 portrait; margin: 10mm; }}');
+                            w.document.write('* {{ box-sizing: border-box; }}');
+                            w.document.write('body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 0; padding: 15px; background: #fff; color: #0f172a; }}');
+                            w.document.write('.gov-os-voucher {{ border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; }}');
+                            w.document.write('table {{ width: 100%; border-collapse: collapse; }}');
+                            w.document.write('td {{ border: 1px solid #cbd5e1; padding: 8px 12px; font-size: 0.85rem; }}');
+                            w.document.write('</style></head><body>');
+                            w.document.write(el.outerHTML);
+                            w.document.write('</body></html>');
+                            w.document.close();
+                            w.focus();
+                            setTimeout(function() {{ w.print(); }}, 250);
+                        }} catch (e) {{
+                            window.parent.print();
+                        }}
+                    }}
+                    </script>
+                    """
+                    components.html(js_popup_impressao, height=52)
+
+                st.caption("💡 Dica: Você pode imprimir diretamente pelo botão acima ou baixar o documento e salvar em PDF.")
 
         # Exportação para CSV / Excel
         st.divider()
@@ -1727,7 +2042,68 @@ def render_aba_admin() -> None:
         if itens_unidades:
             df_u = pd.DataFrame(itens_unidades)
             st.markdown("##### Unidades Cadastradas")
-            st.dataframe(df_u, use_container_width=True, hide_index=True)
+            colunas_u_show = [c for c in ["id", "unidade", "porte", "empresa", "nome_responsavel", "cargo_responsavel"] if c in df_u.columns]
+            st.dataframe(df_u[colunas_u_show] if colunas_u_show else df_u, use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.markdown("#### 🏛️ Carimbo Oficial & Servidor Responsável do Posto de Trabalho")
+            st.caption("A assinatura/carimbo e o nome do responsável ficam vinculados à unidade de saúde selecionada. Quando qualquer chamado desta unidade for consultado, o comprovante puxa esses dados automaticamente.")
+
+            opcoes_uni_dict = {f"{u.get('unidade', 'UNIDADE')} (ID #{u.get('id')})": u for u in itens_unidades if u.get("id")}
+            if opcoes_uni_dict:
+                sel_uni_admin_label = st.selectbox("Selecione o Posto de Saúde para Gerenciar Carimbo/Responsável:", list(opcoes_uni_dict.keys()), key="sb_admin_uni_sig")
+                uni_selecionada = opcoes_uni_dict[sel_uni_admin_label]
+                u_id_sel = int(uni_selecionada["id"])
+                u_nome_sel = uni_selecionada.get("unidade") or ""
+
+                dados_uni_carregados = conexao_bd.carregar_assinatura_unidade_db(u_id_sel, u_nome_sel)
+                sig_uni_carregada = dados_uni_carregados.get("assinatura")
+                resp_nome_padrao = dados_uni_carregados.get("nome_responsavel") or uni_selecionada.get("nome_responsavel") or ""
+                resp_cargo_padrao = dados_uni_carregados.get("cargo_responsavel") or uni_selecionada.get("cargo_responsavel") or ""
+
+                col_u_dados, col_u_img = st.columns([3, 2])
+                with col_u_dados:
+                    with st.form(key=f"form_admin_uni_sig_{u_id_sel}"):
+                        novo_nome_resp = st.text_input("Nome do Servidor Público / Responsável da Unidade:", value=resp_nome_padrao, placeholder="Ex: Dra. Juliana Santos ou Enf. Chefe Marcos")
+                        novo_cargo_resp = st.text_input("Cargo / Função do Responsável:", value=resp_cargo_padrao, placeholder="Ex: Diretor(a) da UBS / Gerente da Unidade")
+                        up_carimbo_file = st.file_uploader(
+                            "Carregar Carimbo / Rubrica Oficial do Posto (PNG transparente ou JPG):",
+                            type=["png", "jpg", "jpeg", "webp"],
+                            key=f"up_carimbo_uni_{u_id_sel}",
+                            help="Carregue o carimbo oficial escaneado ou a assinatura do servidor público responsável."
+                        )
+                        btn_salvar_dados_uni = st.form_submit_button("Salvar Responsável & Carimbo da Unidade 💾", use_container_width=True)
+
+                    if btn_salvar_dados_uni:
+                        b64_salvar_uni = sig_uni_carregada or ""
+                        if up_carimbo_file is not None:
+                            b_c = up_carimbo_file.read()
+                            m_c = up_carimbo_file.type or "image/png"
+                            b64_salvar_uni = f"data:{m_c};base64,{base64.b64encode(b_c).decode('utf-8')}"
+
+                        ok_u_sig, msg_u_sig = conexao_bd.salvar_assinatura_unidade_db(
+                            unidade_id=u_id_sel,
+                            b64_assinatura=b64_salvar_uni,
+                            nome_unidade=u_nome_sel,
+                            nome_responsavel=novo_nome_resp.strip(),
+                            cargo_responsavel=novo_cargo_resp.strip()
+                        )
+                        if ok_u_sig:
+                            st.success(f"✅ Dados do posto '{u_nome_sel}' atualizados com sucesso no sistema!")
+                            st.rerun()
+                        else:
+                            st.error(msg_u_sig)
+
+                with col_u_img:
+                    st.markdown("###### 🔍 Carimbo Oficial Atual:")
+                    if sig_uni_carregada:
+                        st.image(sig_uni_carregada, caption=f"Carimbo • {u_nome_sel}", width=190)
+                        if st.button("🗑️ Remover Carimbo da Unidade", key=f"btn_del_sig_uni_{u_id_sel}"):
+                            conexao_bd.salvar_assinatura_unidade_db(u_id_sel, "", u_nome_sel, novo_nome_resp.strip(), novo_cargo_resp.strip())
+                            st.success("Carimbo removido da unidade.")
+                            st.rerun()
+                    else:
+                        st.info("ℹ️ Nenhum carimbo/rubrica cadastrado para esta unidade de saúde.")
 
     # 3. Gestão de Técnicos
     with sub_tecnicos:
@@ -1758,7 +2134,55 @@ def render_aba_admin() -> None:
 
         itens_tecs, _ = conexao_bd.buscar_itens_tabela("tecnicos")
         if itens_tecs:
-            st.dataframe(pd.DataFrame(itens_tecs), use_container_width=True, hide_index=True)
+            df_t = pd.DataFrame(itens_tecs)
+            st.markdown("##### Técnicos Cadastrados")
+            colunas_t_show = [c for c in ["id", "nome"] if c in df_t.columns]
+            st.dataframe(df_t[colunas_t_show] if colunas_t_show else df_t, use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.markdown("#### ✍️ Gestão de Assinatura Digital do Técnico")
+            st.caption("Cada técnico tem sua assinatura única vinculada ao seu registro no banco de dados. Ao selecionar o técnico na OS, sua assinatura oficial é aplicada automaticamente.")
+
+            opcoes_tec_dict = {f"{t.get('nome', 'TÉCNICO')} (ID #{t.get('id')})": t for t in itens_tecs if t.get("id")}
+            if opcoes_tec_dict:
+                sel_tec_admin_label = st.selectbox("Selecione o Técnico para Vincular/Alterar Assinatura:", list(opcoes_tec_dict.keys()), key="sb_admin_tec_sig")
+                tec_selecionado = opcoes_tec_dict[sel_tec_admin_label]
+                t_id_sel = int(tec_selecionado["id"])
+                t_nome_sel = tec_selecionado.get("nome") or ""
+
+                sig_tec_carregada = conexao_bd.carregar_assinatura_tecnico_db(t_id_sel, t_nome_sel)
+
+                col_t_dados, col_t_img = st.columns([3, 2])
+                with col_t_dados:
+                    st.markdown(f"**Técnico:** `{t_nome_sel}` (ID #{t_id_sel})")
+                    up_tec_sig_file = st.file_uploader(
+                        "Carregar Imagem da Assinatura Oficial (PNG transparente ou JPG):",
+                        type=["png", "jpg", "jpeg", "webp"],
+                        key=f"up_tec_sig_{t_id_sel}",
+                        help="Carregue a assinatura digitalizada deste técnico."
+                    )
+                    if up_tec_sig_file is not None:
+                        if st.button("Salvar Assinatura do Técnico 💾", key=f"btn_salvar_sig_tec_{t_id_sel}", use_container_width=True):
+                            b_t = up_tec_sig_file.read()
+                            m_t = up_tec_sig_file.type or "image/png"
+                            b64_salvar_t = f"data:{m_t};base64,{base64.b64encode(b_t).decode('utf-8')}"
+                            ok_t_sig, msg_t_sig = conexao_bd.salvar_assinatura_tecnico_db(t_id_sel, b64_salvar_t, t_nome_sel)
+                            if ok_t_sig:
+                                st.success(f"✅ Assinatura vinculada com sucesso ao técnico '{t_nome_sel}'!")
+                                st.rerun()
+                            else:
+                                st.error(msg_t_sig)
+
+                with col_t_img:
+                    st.markdown("###### 🔍 Assinatura Atual:")
+                    if sig_tec_carregada:
+                        st.image(sig_tec_carregada, caption=f"Assinatura Oficial • {t_nome_sel}", width=190)
+                        if st.button("🗑️ Remover Assinatura do Técnico", key=f"btn_del_sig_tec_{t_id_sel}"):
+                            conexao_bd.salvar_assinatura_tecnico_db(t_id_sel, "", t_nome_sel)
+                            st.success("Assinatura removida do técnico.")
+                            st.rerun()
+                    else:
+                        st.info("ℹ️ Este técnico ainda não possui assinatura digital cadastrada no sistema.")
 
     # 4. Gestão de Equipamentos
     with sub_equipamentos:
