@@ -554,3 +554,92 @@ def testar_conexao() -> Tuple[bool, str]:
         return True, "✅ Conexão com o Supabase e tabelas relacionais funcionando perfeitamente!"
     except Exception as exc:
         return False, f"❌ Erro de conexão com o banco de dados: {str(exc)}"
+
+
+# ==============================================================================
+# GESTÃO ADMINISTRATIVA DE USUÁRIOS E SENHAS (SUPABASE SERVICE ROLE)
+# ==============================================================================
+
+@st.cache_resource(show_spinner=False)
+def _obter_cliente_admin(url: str, key: str) -> Client:
+    return create_client(url, key)
+
+
+def iniciar_conexao_admin() -> Optional[Client]:
+    """
+    Inicializa o cliente Supabase com a chave mestra SUPABASE_SERVICE_ROLE_KEY.
+    Permite criar usuários já confirmados e redefinir senhas diretamente por código.
+    """
+    service_key = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if not service_key:
+        return None
+    url: str = st.secrets["SUPABASE_URL"].strip()
+    return _obter_cliente_admin(url, service_key)
+
+
+def admin_tem_chave_mestra() -> bool:
+    """Verifica se a SUPABASE_SERVICE_ROLE_KEY está configurada no secrets.toml."""
+    return bool(st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "").strip())
+
+
+def admin_listar_usuarios() -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Lista todos os usuários registrados no Supabase Auth."""
+    client_admin = iniciar_conexao_admin()
+    if not client_admin:
+        return [], "Chave SUPABASE_SERVICE_ROLE_KEY não configurada no secrets.toml."
+    try:
+        res = client_admin.auth.admin.list_users()
+        usuarios: List[Dict[str, Any]] = []
+        for u in (res or []):
+            usuarios.append({
+                "id": str(getattr(u, "id", "")),
+                "email": getattr(u, "email", ""),
+                "criado_em": getattr(u, "created_at", None),
+                "ultimo_login": getattr(u, "last_sign_in_at", None),
+                "confirmado": bool(getattr(u, "email_confirmed_at", None))
+            })
+        return usuarios, None
+    except Exception as exc:
+        return [], str(exc)
+
+
+def admin_criar_usuario(email: str, senha: str) -> Tuple[bool, str]:
+    """Cria uma nova conta no Supabase Auth com senha e ativada imediatamente."""
+    client_admin = iniciar_conexao_admin()
+    if not client_admin:
+        return False, "Chave SUPABASE_SERVICE_ROLE_KEY não configurada no secrets.toml."
+    try:
+        client_admin.auth.admin.create_user({
+            "email": email.strip().lower(),
+            "password": senha,
+            "email_confirm": True
+        })
+        return True, f"Usuário {email} cadastrado com sucesso e já ativado!"
+    except Exception as exc:
+        return False, f"Erro ao criar usuário: {str(exc)}"
+
+
+def admin_alterar_senha(user_id: str, nova_senha: str) -> Tuple[bool, str]:
+    """Altera a senha de um usuário no Supabase Auth diretamente pelo ID."""
+    client_admin = iniciar_conexao_admin()
+    if not client_admin:
+        return False, "Chave SUPABASE_SERVICE_ROLE_KEY não configurada no secrets.toml."
+    try:
+        client_admin.auth.admin.update_user_by_id(user_id, {
+            "password": nova_senha
+        })
+        return True, "Senha alterada com sucesso no Supabase!"
+    except Exception as exc:
+        return False, f"Erro ao alterar senha: {str(exc)}"
+
+
+def admin_excluir_usuario(user_id: str) -> Tuple[bool, str]:
+    """Remove uma conta de usuário do Supabase Auth."""
+    client_admin = iniciar_conexao_admin()
+    if not client_admin:
+        return False, "Chave SUPABASE_SERVICE_ROLE_KEY não configurada no secrets.toml."
+    try:
+        client_admin.auth.admin.delete_user(user_id)
+        return True, "Usuário removido com sucesso do Supabase Auth!"
+    except Exception as exc:
+        return False, f"Erro ao remover usuário: {str(exc)}"

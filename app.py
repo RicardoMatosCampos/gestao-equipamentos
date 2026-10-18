@@ -1110,11 +1110,12 @@ def render_aba_admin() -> None:
         return
 
     st.success("🔓 Perfil Administrador autenticado. Suas alterações atualizam o banco de dados imediatamente.")
-    sub_setores, sub_unidades, sub_tecnicos, sub_equipamentos = st.tabs([
+    sub_setores, sub_unidades, sub_tecnicos, sub_equipamentos, sub_usuarios_auth = st.tabs([
         "🏢 Setores",
         "🏥 Unidades / Postos",
         "👨‍💻 Técnicos",
-        "📦 Equipamentos"
+        "📦 Equipamentos",
+        "👥 Contas & Senhas (Auth)"
     ])
 
     # 1. Gestão de Setores
@@ -1262,6 +1263,95 @@ def render_aba_admin() -> None:
         if itens_eq:
             st.dataframe(pd.DataFrame(itens_eq), use_container_width=True, hide_index=True)
 
+    # 5. Gestão de Contas e Senhas de Usuários (Supabase Auth via Service Role)
+    with sub_usuarios_auth:
+        c_u1, c_u2 = st.columns([5, 1])
+        with c_u1:
+            st.markdown("#### 👥 Gestão de Contas e Senhas dos Técnicos (Supabase Auth)")
+        with c_u2:
+            if st.button("🔄 Atualizar", key="btn_att_sub_usuarios_auth", use_container_width=True):
+                st.rerun()
+
+        st.write("Crie novas contas ativadas para os técnicos e redefina senhas diretamente pelo sistema, sem precisar que o técnico confirme nada por e-mail.")
+
+        tem_service_role = conexao_bd.admin_tem_chave_mestra()
+        if not tem_service_role:
+            st.warning("⚠️ **Chave Mestra (SUPABASE_SERVICE_ROLE_KEY) ainda não configurada no secrets.toml**")
+            st.markdown("""
+            Para poder **alterar a senha de qualquer técnico na hora** e **criar contas sem confirmação de e-mail**, o Supabase exige a chave de Super Administrador (`service_role`):
+            
+            1. Acesse o seu painel do **[Supabase](https://supabase.com/dashboard)**.
+            2. Clique no ícone de engrenagem ⚙️ (**Project Settings**) no canto inferior esquerdo.
+            3. Acesse a seção **API** (ou **API Keys**).
+            4. Em **Project API keys**, copie a chave chamada **`service_role` (secret)**.
+            5. Abra o arquivo `.streamlit/secrets.toml` e adicione a linha:
+               ```toml
+               SUPABASE_SERVICE_ROLE_KEY = "sua_chave_service_role_copiada_aqui"
+               ```
+            Assim que colar essa chave, esta aba liberará o controle total de usuários e senhas imediatamente!
+            """)
+        else:
+            st.success("🛡️ **Supabase Admin Ativo:** Conectado com privilégios de Administrador Mestre.")
+
+            usuarios_auth, err_auth = conexao_bd.admin_listar_usuarios()
+            if err_auth:
+                st.error(f"Erro ao listar usuários: {err_auth}")
+            else:
+                col_cria, col_senha = st.columns(2)
+
+                with col_cria:
+                    st.markdown("##### ➕ Criar Novo Acesso (Já Ativado)")
+                    with st.form(key="form_admin_criar_usuario", clear_on_submit=True):
+                        novo_email = st.text_input("E-mail Corporativo (Lark / TI) *", placeholder="ex: ricardo.campos@tagsinfor.com.br")
+                        nova_senha_ini = st.text_input("Senha Inicial *", type="password", placeholder="Defina a senha inicial...")
+                        btn_cria_user = st.form_submit_button("Criar Conta Ativa 🚀", use_container_width=True)
+                        if btn_cria_user:
+                            if not novo_email or not nova_senha_ini:
+                                st.warning("⚠️ Preencha o e-mail e a senha.")
+                            elif len(nova_senha_ini) < 6:
+                                st.warning("⚠️ A senha deve ter no mínimo 6 caracteres.")
+                            else:
+                                with st.spinner("Criando conta no Supabase..."):
+                                    ok_cr, msg_cr = conexao_bd.admin_criar_usuario(novo_email, nova_senha_ini)
+                                    if ok_cr:
+                                        st.success(msg_cr)
+                                        st.rerun()
+                                    else:
+                                        st.error(msg_cr)
+
+                with col_senha:
+                    st.markdown("##### 🔑 Alterar Senha de Qualquer Técnico")
+                    if usuarios_auth:
+                        opcoes_users = {f"{u['email']} (ID: {u['id'][:8]}...)": u['id'] for u in usuarios_auth if u.get("email")}
+                        with st.form(key="form_admin_trocar_senha", clear_on_submit=True):
+                            user_escolhido = st.selectbox("Selecione o Usuário:", list(opcoes_users.keys()))
+                            nova_senha_direta = st.text_input("Nova Senha Definitiva *", type="password", placeholder="Digite a nova senha...")
+                            btn_mudar_senha = st.form_submit_button("Salvar Nova Senha Imediatamente 💾", use_container_width=True)
+                            if btn_mudar_senha:
+                                if not nova_senha_direta or len(nova_senha_direta) < 6:
+                                    st.warning("⚠️ A nova senha deve ter no mínimo 6 caracteres.")
+                                else:
+                                    uid_alvo = opcoes_users[user_escolhido]
+                                    with st.spinner("Alterando senha no Supabase..."):
+                                        ok_alt, msg_alt = conexao_bd.admin_alterar_senha(uid_alvo, nova_senha_direta)
+                                        if ok_alt:
+                                            st.success("✅ Senha alterada com sucesso! O técnico já pode logar com a nova senha.")
+                                        else:
+                                            st.error(msg_alt)
+
+                st.divider()
+                st.markdown(f"##### 📋 Contas Cadastradas no Supabase Auth ({len(usuarios_auth)})")
+                df_auth = pd.DataFrame(usuarios_auth)
+                if not df_auth.empty:
+                    df_auth["Status"] = df_auth["confirmado"].apply(lambda c: "✅ Ativo / Confirmado" if c else "⏳ Pendente")
+                    colunas_show = [c for c in ["email", "Status", "ultimo_login", "criado_em", "id"] if c in df_auth.columns]
+                    st.dataframe(df_auth[colunas_show].rename(columns={
+                        "email": "E-mail",
+                        "ultimo_login": "Último Acesso",
+                        "criado_em": "Data Criação",
+                        "id": "Identificador (UID)"
+                    }), use_container_width=True, hide_index=True)
+
 
 # ==============================================================================
 # PONTO DE ENTRADA PRINCIPAL (MAIN)
@@ -1280,11 +1370,20 @@ def main() -> None:
     # Renderiza o ambiente autenticado
     render_barra_lateral()
     st.title(f"{APP_ICON} {APP_TITLE}")
+    # Define quais abas estão disponíveis para o usuário com base no perfil de acesso
+    is_admin = bool(st.session_state.get("is_admin", False))
+    abas_permitidas = ABAS_SISTEMA if is_admin else [aba for aba in ABAS_SISTEMA if "Admin" not in aba]
+
+    aba_selecionada_atual = st.session_state.get("aba_selecionada", abas_permitidas[0])
+    if aba_selecionada_atual not in abas_permitidas:
+        aba_selecionada_atual = abas_permitidas[0]
+        st.session_state["aba_selecionada"] = aba_selecionada_atual
+
     # Barra Superior de Navegação Dinâmica entre Abas
     aba_atual = st.segmented_control(
         "Navegação Principal",
-        options=ABAS_SISTEMA,
-        default=st.session_state.get("aba_selecionada", ABAS_SISTEMA[0]),
+        options=abas_permitidas,
+        default=aba_selecionada_atual,
         selection_mode="single",
         label_visibility="collapsed",
         key="nav_segmented_abas"
@@ -1293,7 +1392,7 @@ def main() -> None:
     if aba_atual:
         st.session_state["aba_selecionada"] = aba_atual
     else:
-        aba_atual = st.session_state.get("aba_selecionada", ABAS_SISTEMA[0])
+        aba_atual = st.session_state.get("aba_selecionada", abas_permitidas[0])
 
     st.write("")
 
@@ -1303,7 +1402,7 @@ def main() -> None:
         render_aba_nova_requisicao()
     elif aba_atual == ABAS_SISTEMA[2]:
         render_aba_consulta()
-    elif aba_atual == ABAS_SISTEMA[3]:
+    elif aba_atual == ABAS_SISTEMA[3] and is_admin:
         render_aba_admin()
 
 
