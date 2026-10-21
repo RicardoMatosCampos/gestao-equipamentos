@@ -12,6 +12,7 @@ import hmac
 import importlib
 import json
 import time
+import os
 import textwrap
 from typing import Dict, Any, List, Optional
 import altair as alt
@@ -20,12 +21,16 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import conexao_bd
-
-# Força o recarregamento do módulo conexao_bd para refletir novos métodos sem reiniciar o Streamlit
-try:
-    importlib.reload(conexao_bd)
-except Exception:
-    pass
+importlib.reload(conexao_bd)
+from conexao_bd import (
+    gerar_token_sessao,
+    validar_token_sessao,
+    identificar_tecnico_por_email,
+)
+from components.voucher_os import (
+    gerar_termo_html,
+    render_acoes_impressao_voucher,
+)
 
 from constantes import (
     APP_TITLE,
@@ -39,7 +44,9 @@ from constantes import (
     ZONAS_OPERACIONAIS,
     EMPRESAS_LOTES,
     ABAS_SISTEMA,
-    MAPA_COLUNAS_RELATORIO
+    MAPA_COLUNAS_RELATORIO,
+    formatar_status_para_ui,
+    formatar_status_para_banco
 )
 
 
@@ -55,341 +62,21 @@ st.set_page_config(
 )
 
 
+@st.cache_data(show_spinner=False)
+def carregar_css() -> str:
+    """Carrega o arquivo de estilos CSS corporativo do diretório assets/styles.css."""
+    caminho_css = os.path.join(os.path.dirname(__file__), "assets", "styles.css")
+    if os.path.exists(caminho_css):
+        with open(caminho_css, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
 def aplicar_estilos_customizados() -> None:
-    """Aplica regras de CSS personalizadas para enriquecer a experiência visual corporativa e institucional."""
-    st.markdown(
-        """
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-            /* Tipografia Global */
-            html, body, [class*="css"] {
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            }
-
-            /* Container de Login Institucional */
-            .gov-login-header {
-                text-align: center;
-                padding: 1.5rem 1rem 0.75rem 1rem;
-                margin-bottom: 0.5rem;
-            }
-
-            .gov-badge-top {
-                display: inline-flex;
-                align-items: center;
-                gap: 6px;
-                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-                color: #38bdf8;
-                padding: 4px 12px;
-                border-radius: 9999px;
-                font-size: 0.75rem;
-                font-weight: 700;
-                letter-spacing: 0.08em;
-                text-transform: uppercase;
-                border: 1px solid rgba(56, 189, 248, 0.25);
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-                margin-bottom: 12px;
-            }
-
-            .gov-portal-title {
-                font-size: 1.65rem;
-                font-weight: 800;
-                color: #0f172a;
-                margin: 0 0 6px 0;
-                line-height: 1.25;
-                letter-spacing: -0.02em;
-            }
-
-            @media (prefers-color-scheme: dark) {
-                .gov-portal-title {
-                    color: #f8fafc;
-                }
-            }
-
-            .gov-portal-subtitle {
-                font-size: 0.88rem;
-                color: #64748b;
-                margin: 0 auto;
-                max-width: 520px;
-                line-height: 1.45;
-            }
-
-            /* Barra de Segurança e Status */
-            .gov-security-bar {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                flex-wrap: wrap;
-                gap: 16px;
-                padding: 8px 14px;
-                background: rgba(241, 245, 249, 0.7);
-                border: 1px solid #e2e8f0;
-                border-radius: 8px;
-                font-size: 0.78rem;
-                color: #334155;
-                font-weight: 500;
-                margin: 1rem 0 1.25rem 0;
-            }
-
-            @media (prefers-color-scheme: dark) {
-                .gov-security-bar {
-                    background: rgba(30, 41, 59, 0.6);
-                    border-color: #334155;
-                    color: #cbd5e1;
-                }
-            }
-
-            .gov-status-dot {
-                display: inline-block;
-                width: 8px;
-                height: 8px;
-                background-color: #10b981;
-                border-radius: 50%;
-                box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
-            }
-
-            /* Estilização do Form de Login */
-            div[data-testid="stForm"] {
-                border-radius: 12px;
-                border: 1px solid #e2e8f0;
-                padding: 1.5rem;
-                background: #ffffff;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-            }
-
-            @media (prefers-color-scheme: dark) {
-                div[data-testid="stForm"] {
-                    background: #0f172a;
-                    border-color: #1e293b;
-                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-                }
-            }
-
-            /* Abas de Autenticação */
-            button[data-baseweb="tab"] {
-                font-weight: 600;
-                font-size: 0.88rem;
-                padding: 8px 16px;
-                border-radius: 6px 6px 0 0;
-            }
-
-            /* Botões Institucionais */
-            div.stButton > button:first-child,
-            button[kind="primaryFormSubmit"] {
-                border-radius: 8px;
-                font-weight: 600;
-                font-size: 0.95rem;
-                padding: 0.55rem 1.25rem;
-                transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                border: none;
-            }
-
-            div.stButton > button:first-child:hover,
-            button[kind="primaryFormSubmit"]:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
-            }
-
-            /* Cartões de métricas aprimorados */
-            div[data-testid="stMetricValue"] {
-                font-size: 1.8rem;
-                font-weight: 700;
-            }
-
-            /* Box de Conformidade e LGPD no Rodapé */
-            .gov-compliance-notice {
-                background: #f8fafc;
-                border: 1px solid #e2e8f0;
-                border-left: 4px solid #0284c7;
-                padding: 12px 14px;
-                border-radius: 6px;
-                font-size: 0.76rem;
-                color: #475569;
-                line-height: 1.45;
-                margin-top: 1.5rem;
-            }
-
-            @media (prefers-color-scheme: dark) {
-                .gov-compliance-notice {
-                    background: #1e293b;
-                    border-color: #334155;
-                    border-left-color: #38bdf8;
-                    color: #94a3b8;
-                }
-            }
-
-            .gov-footer-credentials {
-                text-align: center;
-                font-size: 0.74rem;
-                color: #94a3b8;
-                margin-top: 1rem;
-                padding-bottom: 2rem;
-            }
-
-            /* Espelho de Ordem de Serviço para Impressão */
-            .gov-os-voucher {
-                background: #ffffff !important;
-                color: #0f172a !important;
-                border: 1px solid #cbd5e1;
-                border-radius: 8px;
-                padding: 1.5rem;
-                margin-top: 1rem;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            }
-
-            @media print {
-                header, footer, [data-testid="stSidebar"], [data-testid="stToolbar"], [data-testid="stDecoration"], .stApp > header {
-                    display: none !important;
-                }
-                body * {
-                    visibility: hidden !important;
-                }
-                #os-voucher-print, #os-voucher-print * {
-                    visibility: visible !important;
-                }
-                #os-voucher-print {
-                    position: absolute !important;
-                    left: 0 !important;
-                    top: 0 !important;
-                    width: 100% !important;
-                    margin: 0 !important;
-                    padding: 16px !important;
-                    border: 1px solid #cbd5e1 !important;
-                    box-shadow: none !important;
-                    background: #ffffff !important;
-                    color: #0f172a !important;
-                }
-            }
-
-            /* Cabeçalhos e divisores */
-            hr {
-                margin: 1.25rem 0;
-                border-color: #e2e8f0;
-            }
-            @media (prefers-color-scheme: dark) {
-                hr {
-                    border-color: #1e293b;
-                }
-            }
-
-            /* ========================================================= */
-            /* RESPONSIVIDADE MOBILE & TABLET (TOUCH-FRIENDLY & USABILIDADE) */
-            /* ========================================================= */
-            @media (max-width: 768px) {
-                /* Previne zoom automático do iOS Safari ao focar campos */
-                input, select, textarea {
-                    font-size: 16px !important;
-                }
-
-                /* Sidebar Otimizada para Celular */
-                section[data-testid="stSidebar"] {
-                    width: 88vw !important;
-                    max-width: 320px !important;
-                    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.25) !important;
-                }
-
-                /* Botões da barra lateral no celular: altura mínima de 48px e toque confortável */
-                section[data-testid="stSidebar"] div.stButton > button {
-                    min-height: 48px !important;
-                    height: auto !important;
-                    font-size: 0.95rem !important;
-                    padding: 0.75rem 1rem !important;
-                    margin-bottom: 8px !important;
-                    border-radius: 8px !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: flex-start !important;
-                    text-align: left !important;
-                    touch-action: manipulation !important;
-                    -webkit-tap-highlight-color: transparent !important;
-                }
-
-                section[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
-                    background: #0284c7 !important;
-                    color: #ffffff !important;
-                    font-weight: 700 !important;
-                    border: 1px solid #0369a1 !important;
-                    box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3) !important;
-                }
-
-                /* Botão do menu hamburguer em destaque para fácil toque */
-                button[data-testid="stSidebarCollapseButton"],
-                [data-testid="stSidebarHeader"] button {
-                    padding: 10px !important;
-                    min-width: 44px !important;
-                    min-height: 44px !important;
-                    border-radius: 8px !important;
-                }
-
-                /* Colunas adaptáveis no Celular: evita colunas esmagadas em linha */
-                div[data-testid="stHorizontalBlock"] {
-                    flex-wrap: wrap !important;
-                    gap: 10px !important;
-                }
-
-                div[data-testid="column"] {
-                    min-width: 48% !important;
-                    flex: 1 1 48% !important;
-                    margin-bottom: 6px !important;
-                }
-
-                div[data-testid="column"]:empty {
-                    display: none !important;
-                }
-
-                /* Métricas e KPIs no celular em 2 colunas legíveis */
-                div[data-testid="stMetricValue"] {
-                    font-size: 1.45rem !important;
-                }
-
-                /* Formulários e botões principais com toque suave */
-                div.stButton > button:first-child,
-                button[kind="primaryFormSubmit"] {
-                    min-height: 48px !important;
-                    font-size: 0.95rem !important;
-                    padding: 0.75rem 1.25rem !important;
-                    touch-action: manipulation !important;
-                }
-
-                /* Login container ajustado para tela cheia mobile */
-                .gov-login-header {
-                    padding: 0.75rem 0.25rem !important;
-                }
-                .gov-portal-title {
-                    font-size: 1.35rem !important;
-                }
-                .gov-security-bar {
-                    gap: 8px !important;
-                    font-size: 0.72rem !important;
-                    padding: 6px 10px !important;
-                }
-                div[data-baseweb="select"] input {
-                    -webkit-user-select: text !important;
-                    user-select: text !important;
-                    pointer-events: auto !important;
-                    cursor: text !important;
-                }
-                div[data-baseweb="select"] {
-                    touch-action: manipulation !important;
-                }
-            }
-
-            /* Oculta o container do componente HTML de suporte sem interromper o script */
-            iframe[title="streamlit.components.v1.html"],
-            div[data-testid="stCustomComponentV1"] {
-                position: absolute !important;
-                width: 0 !important;
-                height: 0 !important;
-                border: none !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                overflow: hidden !important;
-            }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    """Aplica regras de CSS personalizadas e utilitários de usabilidade para mobile e desktop."""
+    css = carregar_css()
+    if css:
+        st.markdown(f"<style>\n{css}\n</style>", unsafe_allow_html=True)
 
     # Executa o script de usabilidade mobile via iframe que acessa o DOM principal
     components.html(
@@ -490,19 +177,69 @@ def aplicar_estilos_customizados() -> None:
                 }
             }, { capture: true, passive: true });
 
-            // Observador de mutações para novos selects adicionados
+            // Tradução do calendário BaseWeb para padrão Brasil PT-BR
+            const mapaDiasPtBr = {
+                'Su': 'Dom', 'Mo': 'Seg', 'Tu': 'Ter', 'We': 'Qua', 'Th': 'Qui', 'Fr': 'Sex', 'Sa': 'Sáb',
+                'Sun': 'Dom', 'Mon': 'Seg', 'Tue': 'Ter', 'Wed': 'Qua', 'Thu': 'Qui', 'Fri': 'Sex', 'Sat': 'Sáb'
+            };
+
+            const mapaMesesPtBr = {
+                'January': 'Janeiro', 'February': 'Fevereiro', 'March': 'Março',
+                'April': 'Abril', 'May': 'Maio', 'June': 'Junho',
+                'July': 'Julho', 'August': 'Agosto', 'September': 'Setembro',
+                'October': 'Outubro', 'November': 'Novembro', 'December': 'Dezembro',
+                'Jan': 'Jan', 'Feb': 'Fev', 'Mar': 'Mar', 'Apr': 'Abr', 'May': 'Mai', 'Jun': 'Jun',
+                'Jul': 'Jul', 'Aug': 'Ago', 'Sep': 'Set', 'Oct': 'Out', 'Nov': 'Nov', 'Dec': 'Dez'
+            };
+
+            function traduzirCalendarioPtBr() {
+                try {
+                    const containers = parentDoc.querySelectorAll('div[data-baseweb="calendar"], div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"]');
+                    if (!containers || containers.length === 0) return;
+
+                    containers.forEach(function(container) {
+                        // 1. Traduz cabeçalhos dos dias da semana (Dom, Seg, Ter...)
+                        const dayHeaders = container.querySelectorAll('div[role="columnheader"], div');
+                        dayHeaders.forEach(function(el) {
+                            if (el.children.length === 0 && el.textContent) {
+                                const txt = el.textContent.trim();
+                                if (mapaDiasPtBr[txt]) {
+                                    el.textContent = mapaDiasPtBr[txt];
+                                    el.setAttribute('title', mapaDiasPtBr[txt]);
+                                }
+                            }
+                        });
+
+                        // 2. Traduz nomes dos meses no cabeçalho e na lista de opções
+                        const monthElements = container.querySelectorAll('span, div, li[role="option"]');
+                        monthElements.forEach(function(el) {
+                            if (el.children.length === 0 && el.textContent) {
+                                const txt = el.textContent.trim();
+                                if (mapaMesesPtBr[txt]) {
+                                    el.textContent = mapaMesesPtBr[txt];
+                                }
+                            }
+                        });
+                    });
+                } catch(e) {}
+            }
+
+            // Observador de mutações para novos elementos adicionados dinamicamente
             try {
                 const observer = new MutationObserver(function() {
                     desbloquearDigitacaoSelectMobile();
                     inicializarAutoCloseSidebarMobile();
+                    traduzirCalendarioPtBr();
                 });
                 observer.observe(parentDoc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['readonly', 'inputmode'] });
             } catch(e) {}
 
             setInterval(desbloquearDigitacaoSelectMobile, 400);
             setInterval(inicializarAutoCloseSidebarMobile, 1000);
+            setInterval(traduzirCalendarioPtBr, 250);
             desbloquearDigitacaoSelectMobile();
             inicializarAutoCloseSidebarMobile();
+            traduzirCalendarioPtBr();
         })();
         </script>
         """,
@@ -512,111 +249,9 @@ def aplicar_estilos_customizados() -> None:
 
 
 # ==============================================================================
-# UTILITÁRIOS DE SESSÃO E IDENTIFICAÇÃO (PERSISTÊNCIA & VINCULAÇÃO)
+# CONTROLE DE PERFIL E SESSÃO DO USUÁRIO
 # ==============================================================================
 
-def gerar_token_sessao(dados_usuario: Dict[str, Any]) -> str:
-    """
-    Gera um token criptográfico assinado com HMAC-SHA256 para persistência
-    de login entre recarregamentos de página (F5) e navegação mobile.
-    """
-    if hasattr(conexao_bd, "gerar_token_sessao"):
-        try:
-            tok = conexao_bd.gerar_token_sessao(dados_usuario)
-            if tok:
-                return tok
-        except Exception:
-            pass
-    try:
-        url = st.secrets.get("SUPABASE_URL", "").strip()
-        key = st.secrets.get("SUPABASE_KEY", "").strip()
-        secret = (key + url).encode("utf-8")
-        payload = {
-            "email": dados_usuario.get("email"),
-            "id": str(dados_usuario.get("id")),
-            "perfil": dados_usuario.get("perfil", "Técnico de TI"),
-            "is_admin": bool(dados_usuario.get("is_admin", False)),
-            "ts": int(time.time())
-        }
-        raw_bytes = json.dumps(payload).encode("utf-8")
-        b64_payload = base64.urlsafe_b64encode(raw_bytes).decode("utf-8")
-        sig = hmac.new(secret, b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
-        return f"{b64_payload}.{sig}"
-    except Exception:
-        return ""
-
-
-def validar_token_sessao(token: Optional[str]) -> Optional[Dict[str, Any]]:
-    """
-    Valida a autenticidade e validade (30 dias) do token de sessão.
-    Garante que o técnico continue conectado mesmo após recarregar a tela.
-    """
-    if not token or "." not in token:
-        return None
-    if hasattr(conexao_bd, "validar_token_sessao"):
-        try:
-            res = conexao_bd.validar_token_sessao(token)
-            if res:
-                return res
-        except Exception:
-            pass
-    try:
-        url = st.secrets.get("SUPABASE_URL", "").strip()
-        key = st.secrets.get("SUPABASE_KEY", "").strip()
-        secret = (key + url).encode("utf-8")
-        b64_payload, signature = token.strip().split(".", 1)
-        expected_sig = hmac.new(secret, b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected_sig):
-            return None
-        raw_bytes = base64.urlsafe_b64decode(b64_payload.encode("utf-8"))
-        payload = json.loads(raw_bytes.decode("utf-8"))
-        idade_segundos = time.time() - payload.get("ts", 0)
-        if idade_segundos > 30 * 24 * 3600 or idade_segundos < -60:
-            return None
-        return payload
-    except Exception:
-        return None
-
-
-def identificar_tecnico_por_email(email: Optional[str]) -> Optional[Dict[str, Any]]:
-    """
-    Identifica automaticamente o técnico cadastrado a partir do e-mail de login.
-    """
-    if not email:
-        return None
-    if hasattr(conexao_bd, "identificar_tecnico_por_email"):
-        try:
-            res = conexao_bd.identificar_tecnico_por_email(email)
-            if res:
-                return res
-        except Exception:
-            pass
-    try:
-        tecnicos, _ = conexao_bd.buscar_tecnicos()
-        if not tecnicos:
-            return None
-        email_completo = email.strip().lower()
-        email_clean = email_completo.split("@")[0]
-
-        # 1. Prioridade Máxima: correspondência exata pela coluna 'email'
-        for t in tecnicos:
-            if t.get("email") and str(t.get("email")).strip().lower() == email_completo:
-                return t
-
-        # 2. Correspondência pelo primeiro ou último nome
-        for t in tecnicos:
-            nome_completo = str(t.get("nome", "")).lower()
-            partes = nome_completo.split()
-            if partes and (partes[0] in email_clean or partes[-1] in email_clean):
-                return t
-        for t in tecnicos:
-            nome_completo = str(t.get("nome", "")).lower()
-            for p in nome_completo.split():
-                if len(p) >= 4 and p in email_clean:
-                    return t
-        return None
-    except Exception:
-        return None
 
 
 def obter_perfil_e_abas(email: Optional[str], is_admin: bool) -> Tuple[str, List[str]]:
@@ -841,20 +476,60 @@ def render_tela_login() -> None:
 def render_barra_lateral() -> None:
     """Renderiza a barra lateral com perfil do usuário logado e utilitários."""
     with st.sidebar:
-        st.subheader("👤 Usuário Conectado")
-        st.write(f"**Conta:** `{st.session_state['usuario_email']}`")
-
-        perfil_nome = st.session_state.get("usuario_perfil", "Técnico de TI")
-        if st.session_state.get("is_admin"):
-            st.success("🛡️ Perfil: **Administrador**")
-        elif perfil_nome == "Gestor / Visualizador":
-            st.info("📊 Perfil: **Gestor / Visualizador**")
-        else:
-            st.info("🔧 Perfil: **Técnico de TI**")
-
         tec_fixo = st.session_state.get("tecnico_fixado")
-        if tec_fixo:
-            st.caption(f"👨‍💻 Técnico Vinculado: **{tec_fixo.get('nome')}**")
+        email_usuario = st.session_state.get("usuario_email", "")
+        nome_usuario = tec_fixo.get("nome") if tec_fixo else ""
+        if not nome_usuario:
+            nome_usuario = email_usuario.split("@")[0].replace(".", " ") if email_usuario else "Usuário"
+        nome_usuario = nome_usuario.upper()
+
+        if st.session_state.get("is_admin"):
+            perfil_label = "Administrador"
+            icone_perfil = "🛡️"
+        elif st.session_state.get("usuario_perfil") == "Gestor / Visualizador":
+            perfil_label = "Gestor"
+            icone_perfil = "📊"
+        else:
+            perfil_label = "Técnico de TI"
+            icone_perfil = "🔧"
+
+        st.markdown(
+            f"""
+            <div class="user-sidebar-card">
+                <div class="user-sidebar-label">
+                    <span>👤</span> Usuário Conectado
+                </div>
+                <div class="user-sidebar-avatar-wrap">
+                    <div class="user-sidebar-avatar">
+                        👨‍💻
+                    </div>
+                    <div class="user-sidebar-online-badge" title="Usuário Ativo / Online"></div>
+                </div>
+                <div class="user-sidebar-name">{nome_usuario}</div>
+                <div class="user-sidebar-email">{email_usuario}</div>
+                <div>
+                    <span class="user-sidebar-role-pill">{icone_perfil} Perfil: {perfil_label}</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown('<div class="sidebar-nav-title">Navegação Rápida</div>', unsafe_allow_html=True)
+        is_admin = bool(st.session_state.get("is_admin", False))
+        abas_permitidas = ABAS_SISTEMA if is_admin else [aba for aba in ABAS_SISTEMA if "Admin" not in aba]
+        aba_atual_side = st.session_state.get("aba_selecionada", abas_permitidas[0])
+
+        for aba_nome in abas_permitidas:
+            is_ativa = (aba_atual_side == aba_nome)
+            tipo_btn = "primary" if is_ativa else "secondary"
+            btn_label = f"▶ {aba_nome[2:].strip()}" if (is_ativa and len(aba_nome) > 2) else aba_nome
+            if st.button(btn_label, key=f"side_nav_{aba_nome}", use_container_width=True, type=tipo_btn):
+                st.session_state["aba_selecionada"] = aba_nome
+                st.session_state["nav_segmented_abas"] = aba_nome
+                st.rerun()
+
+        st.divider()
 
         # Gerenciamento de Assinatura Digital do Técnico
         with st.expander("✍️ Minha Assinatura Digital", expanded=False):
@@ -905,21 +580,6 @@ def render_barra_lateral() -> None:
             st.rerun()
 
         st.divider()
-        st.subheader("📌 Navegação Rápida")
-        is_admin = bool(st.session_state.get("is_admin", False))
-        abas_permitidas = ABAS_SISTEMA if is_admin else [aba for aba in ABAS_SISTEMA if "Admin" not in aba]
-        aba_atual_side = st.session_state.get("aba_selecionada", abas_permitidas[0])
-
-        for aba_nome in abas_permitidas:
-            is_ativa = (aba_atual_side == aba_nome)
-            tipo_btn = "primary" if is_ativa else "secondary"
-            btn_label = f"▶ {aba_nome}" if is_ativa else aba_nome
-            if st.button(btn_label, key=f"side_nav_{aba_nome}", use_container_width=True, type=tipo_btn):
-                st.session_state["aba_selecionada"] = aba_nome
-                st.session_state["nav_segmented_abas"] = aba_nome
-                st.rerun()
-
-        st.divider()
         st.header("⚙️ Banco de Dados")
         if st.button("🔌 Testar Conexão Supabase", use_container_width=True):
             st.cache_resource.clear()
@@ -941,6 +601,7 @@ def render_aba_dashboard() -> None:
         st.subheader("📊 Painel Executivo & Indicadores Contratuais (SLA)")
     with col_t2:
         if st.button("🔄 Atualizar", key="btn_att_dashboard", use_container_width=True):
+            conexao_bd.limpar_cache_dados()
             st.rerun()
 
     st.caption("Acompanhamento de metas contratuais, tempo de resposta, índice de manutenções preventivas e controle patrimonial para órgãos públicos e empresas privadas.")
@@ -989,9 +650,13 @@ def render_aba_dashboard() -> None:
     total_chamados = len(df_dash)
     total_pecas = int(df_dash["quantidade"].sum()) if "quantidade" in df_dash.columns else total_chamados
     status_serie = df_dash["status"] if "status" in df_dash.columns else pd.Series([], dtype=str)
+    
+    # Índices dos 5 status operacionais definidos em OPCOES_STATUS
     pendentes = int((status_serie == OPCOES_STATUS[0]).sum())
-    manutencao = int((status_serie == OPCOES_STATUS[1]).sum())
-    concluidos = int((status_serie == OPCOES_STATUS[2]).sum())
+    pedidos_estoque = int((status_serie == OPCOES_STATUS[1]).sum())
+    prontos_estoque = int((status_serie == OPCOES_STATUS[2]).sum())
+    manutencao = int((status_serie == OPCOES_STATUS[3]).sum())
+    concluidos = int(status_serie.astype(str).str.contains("Concluído|Devolvido", case=False, na=False).sum())
     taxa_resolucao = (concluidos / total_chamados * 100) if total_chamados > 0 else 0
 
     # Índice de Visitas Preventivas vs Corretivas (Métrica exigida em auditorias públicas)
@@ -1003,7 +668,7 @@ def render_aba_dashboard() -> None:
     hoje = date.today()
     def verificar_atraso(row):
         st_val = str(row.get("status", ""))
-        if OPCOES_STATUS[2] in st_val:
+        if any(term in st_val.lower() for term in ["concluído", "concluido", "devolvido"]):
             return False
         data_prev = row.get("data_prevista_retorno")
         if not data_prev or pd.isna(data_prev):
@@ -1040,10 +705,11 @@ def render_aba_dashboard() -> None:
     if total_atrasados > 0:
         with st.expander(f"⚠️ Atenção Fiscalização: {total_atrasados} chamado(s) com prazo de retorno expirado", expanded=True):
             st.caption("Ordens de serviço que requerem intervenção prioritária da equipe técnica para cumprimento do SLA contratual.")
-            cols_atraso = ["numero_chamado", "unidade_nome", "porte", "equipamento_nome", "tecnico_nome", "data_prevista_retorno", "status"]
+            cols_atraso = ["numero_chamado", "numero_pedido", "unidade_nome", "porte", "equipamento_nome", "tecnico_nome", "data_prevista_retorno", "status"]
             cols_existentes = [c for c in cols_atraso if c in df_dash.columns]
             df_atrasados = df_dash[df_dash["em_atraso"]][cols_existentes].rename(columns={
                 "numero_chamado": "Chamado / O.S.",
+                "numero_pedido": "Nº Pedido Estoque",
                 "unidade_nome": "Unidade de Saúde",
                 "porte": "Porte",
                 "equipamento_nome": "Equipamento / Peça",
@@ -1068,9 +734,11 @@ def render_aba_dashboard() -> None:
         df_st.columns = ["Status", "Total"]
 
         mapa_cores = {
-            OPCOES_STATUS[0]: "#D97706",
-            OPCOES_STATUS[1]: "#2563EB",
-            OPCOES_STATUS[2]: "#059669"
+            OPCOES_STATUS[0]: "#D97706",  # Pendente / Aguardando Peça
+            OPCOES_STATUS[1]: "#8B5CF6",  # Pedido Solicitado no Estoque
+            OPCOES_STATUS[2]: "#0EA5E9",  # Liberado no Estoque / Pronto
+            OPCOES_STATUS[3]: "#2563EB",  # Em Manutenção
+            OPCOES_STATUS[4]: "#059669"   # Concluído / Devolvido
         }
         cores_lista = [mapa_cores.get(s, "#64748B") for s in df_st["Status"]]
 
@@ -1209,6 +877,7 @@ def render_aba_nova_requisicao() -> None:
         st.subheader("📝 Abertura de Nova Requisição")
     with col_t2:
         if st.button("🔄 Atualizar", key="btn_att_nova_req", use_container_width=True):
+            conexao_bd.limpar_cache_dados()
             st.rerun()
 
     st.write("Selecione o porte da unidade para carregar automaticamente a lista de postos e setores vinculados no banco de dados.")
@@ -1288,13 +957,40 @@ def render_aba_nova_requisicao() -> None:
                     index=idx_default,
                     placeholder="Selecione o seu nome..."
                 )
-            numero_chamado = st.text_input("Número do Chamado / Ticket (Opcional)")
+            numero_chamado = st.text_input("Número do Chamado / Ticket *", placeholder="Ex: 202617392")
+
+            is_adm_usuario = st.session_state.get("is_admin", False)
+
+            # O campo de pedido no estoque NÃO é exibido para o técnico na abertura do chamado
+            if is_adm_usuario:
+                numero_pedido = st.text_input(
+                    "Número do Pedido no Estoque (Opcional - Admin)",
+                    placeholder="Ex: PED-2026-089",
+                    help="Se preenchido, o status do chamado mudará automaticamente para '📦 Pedido Solicitado no Estoque'."
+                )
+            else:
+                numero_pedido = ""
+
             tipo_visita = st.selectbox("Tipo de Visita *", OPCOES_TIPO_VISITA)
-            data_retorno = st.date_input(
-                "Data Prevista de Retorno *",
-                value=date.today(),
-                format="DD/MM/YYYY"
-            )
+
+            # Previsão automática de 48 horas a partir da solicitação (Regra SLA Contratual)
+            previsao_sla_48h = date.today() + timedelta(days=2)
+
+            if is_adm_usuario:
+                data_retorno = st.date_input(
+                    "Data Prevista de Retorno (SLA 48h) *",
+                    value=previsao_sla_48h,
+                    format="DD/MM/YYYY",
+                    help="SLA padrão contratual de 48 horas. Como Administrador, você pode ajustar esta data."
+                )
+            else:
+                st.text_input(
+                    "Data Prevista de Retorno (SLA 48h Automático) *",
+                    value=previsao_sla_48h.strftime("%d/%m/%Y"),
+                    disabled=True,
+                    help="Prazo padrão contratual de 48 horas a partir da abertura. Alterações podem ser realizadas exclusivamente por Administrador no Histórico."
+                )
+                data_retorno = previsao_sla_48h
 
         with col2:
             label_unidade = st.selectbox(
@@ -1340,7 +1036,8 @@ def render_aba_nova_requisicao() -> None:
         botao_enviar = st.form_submit_button("Enviar Requisição 🚀", use_container_width=True)
 
     if botao_enviar:
-        if not label_tecnico or not label_unidade or not label_setor or not motivo or not servico_realizado or not label_equipamento:
+        chamado_preenchido = bool(numero_chamado and numero_chamado.strip())
+        if not label_tecnico or not label_unidade or not label_setor or not motivo or not servico_realizado or not label_equipamento or not chamado_preenchido:
             st.warning("⚠️ Por favor, preencha todos os campos obrigatórios marcados com (*).")
         else:
             obj_tec = dict_tecnicos[label_tecnico]
@@ -1348,19 +1045,23 @@ def render_aba_nova_requisicao() -> None:
             obj_set = dict_setores[label_setor]
             obj_eq = dict_equipamentos[label_equipamento]
 
+            num_ped_limpo = numero_pedido.strip() if numero_pedido else ""
+            status_inicial = OPCOES_STATUS[1] if num_ped_limpo else OPCOES_STATUS[0]
+
             dados = {
                 "tecnico_id": obj_tec.get("id"),
                 "unidade_id": obj_uni.get("id"),
                 "setor_id": obj_set.get("id"),
                 "equipamento_id": obj_eq.get("id"),
                 "numero_chamado": numero_chamado.strip() if numero_chamado else "",
+                "numero_pedido": num_ped_limpo,
                 "tipo_visita": tipo_visita,
                 "motivo_chamado": motivo,
                 "servico_realizado": servico_realizado,
                 "data_prevista_retorno": data_retorno.strftime("%Y-%m-%d"),
                 "quantidade": int(quantidade),
                 "observacao": observacao.strip() if observacao else "",
-                "status": OPCOES_STATUS[0]
+                "status": status_inicial
             }
 
             with st.spinner("Gravando atendimento no Supabase..."):
@@ -1376,6 +1077,7 @@ def render_aba_nova_requisicao() -> None:
                 nome_tec = obj_tec.get("nome", label_tecnico)
                 nome_eq = obj_eq.get("nome", label_equipamento)
 
+                info_pedido = f"* **Nº Pedido Estoque:** `{num_ped_limpo}`\n" if num_ped_limpo else ""
                 st.info(f"""
                 **📋 Comprovante da Solicitação #{id_protocolo}**
                 * **Porte:** {porte_escolhido}
@@ -1384,8 +1086,8 @@ def render_aba_nova_requisicao() -> None:
                 * **Técnico:** {nome_tec}
                 * **Material:** {quantidade}x {nome_eq}
                 * **Chamado:** {numero_chamado if numero_chamado else 'Não informado'}
-                * **Previsão de Retorno:** {data_retorno.strftime('%d/%m/%Y')}
-                * **Status Inicial:** {OPCOES_STATUS[0]}
+                {info_pedido}* **Previsão de Retorno (SLA 48h):** {data_retorno.strftime('%d/%m/%Y')}
+                * **Status Inicial:** {status_inicial}
                 """)
             else:
                 st.error(f"❌ {mensagem}")
@@ -1403,6 +1105,7 @@ def render_aba_consulta() -> None:
         st.subheader("📋 Histórico Geral de Atendimentos")
     with col_t2:
         if st.button("🔄 Atualizar", key="btn_att_consulta", use_container_width=True):
+            conexao_bd.limpar_cache_dados()
             st.rerun()
 
     registros, erro = conexao_bd.buscar_requisicoes()
@@ -1451,7 +1154,9 @@ def render_aba_consulta() -> None:
             total_retornos_semana = len(chamados_semana)
 
             if "status" in chamados_semana.columns:
-                pendentes_semana = chamados_semana[chamados_semana["status"] != OPCOES_STATUS[2]]
+                pendentes_semana = chamados_semana[
+                    ~chamados_semana["status"].astype(str).str.contains("Concluído|Devolvido", case=False, na=False)
+                ]
                 qtd_pendentes_semana = len(pendentes_semana)
             else:
                 qtd_pendentes_semana = total_retornos_semana
@@ -1459,43 +1164,145 @@ def render_aba_consulta() -> None:
             total_retornos_semana = 0
             qtd_pendentes_semana = 0
 
-        # 4. Status de ciclo de vida
+        # 4. Status de ciclo de vida (5 status operacionais)
         status_serie = df["status"] if "status" in df.columns else pd.Series([], dtype=str)
-        pendentes = int((status_serie == OPCOES_STATUS[0]).sum())
-        manutencao = int((status_serie == OPCOES_STATUS[1]).sum())
-        concluidos = int((status_serie == OPCOES_STATUS[2]).sum())
+        qtd_pendentes = int(status_serie.astype(str).str.contains("Pendente", case=False, na=False).sum())
+        qtd_pedidos_est = int(status_serie.astype(str).str.contains("Pedido Solicitado", case=False, na=False).sum())
+        qtd_prontos_est = int(status_serie.astype(str).str.contains("Liberado|Pronto", case=False, na=False).sum())
+        qtd_manutencao = int(status_serie.astype(str).str.contains("Manutenção", case=False, na=False).sum())
+        qtd_concluidos = int(status_serie.astype(str).str.contains("Concluído|Devolvido", case=False, na=False).sum())
 
-        # Painel de Métricas (Dashboard)
-        st.markdown("##### 📈 Indicadores Principais")
+        total_pecas = int(df['quantidade'].sum()) if 'quantidade' in df.columns and pd.to_numeric(df['quantidade'], errors='coerce').notna().any() else len(df)
+        retornos_delta = f"↑ {qtd_pendentes_semana} em aberto" if qtd_pendentes_semana > 0 else "↑ Em dia"
+
+        # Linha 1: 4 Cards Principais com Bordas Neon
         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        col_m1.metric("📅 Requisições do Mês", f"{total_mes}", f"Mês {hoje_ts.strftime('%m/%Y')}")
-        col_m2.metric("🏆 Mais Solicitado", mais_pedido_label, mais_pedido_detalhe)
-        col_m3.metric("⏰ Retornos da Semana", f"{total_retornos_semana}", f"{qtd_pendentes_semana} em aberto" if qtd_pendentes_semana > 0 else "Em dia ✅")
-        col_m4.metric("📦 Total de Chamados", f"{len(df)}", f"{int(df['quantidade'].sum()) if 'quantidade' in df.columns else len(df)} peças")
 
-        col_s1, col_s2, col_s3 = st.columns(3)
-        col_s1.metric(OPCOES_STATUS[0], pendentes)
-        col_s2.metric(OPCOES_STATUS[1], manutencao)
-        col_s3.metric(OPCOES_STATUS[2], concluidos)
+        with col_m1:
+            st.markdown(
+                f"""
+                <div class="kpi-card kpi-card-purple">
+                    <div class="kpi-header">📅 Requisições do Mês</div>
+                    <div class="kpi-value">{total_mes}</div>
+                    <div class="kpi-delta">↑ Mês {hoje_ts.strftime('%m/%Y')}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with col_m2:
+            st.markdown(
+                f"""
+                <div class="kpi-card kpi-card-amber">
+                    <div class="kpi-header">🏆 Mais Solicitado</div>
+                    <div class="kpi-value" style="font-size: 1.55rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{mais_pedido_label}">{mais_pedido_label}</div>
+                    <div class="kpi-delta">↑ {mais_pedido_detalhe}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with col_m3:
+            st.markdown(
+                f"""
+                <div class="kpi-card kpi-card-blue">
+                    <div class="kpi-header">⏰ Retornos da Semana</div>
+                    <div class="kpi-value">{total_retornos_semana}</div>
+                    <div class="kpi-delta">{retornos_delta}</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with col_m4:
+            st.markdown(
+                f"""
+                <div class="kpi-card kpi-card-green">
+                    <div class="kpi-header">📦 Total de Chamados</div>
+                    <div class="kpi-value">{len(df)}</div>
+                    <div class="kpi-delta">↑ {total_pecas} peças</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        st.write("")
+
+        # Linha 2: 5 Mini Cards de Status em Cápsula
+        col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
+
+        with col_s1:
+            st.markdown(
+                f"""
+                <div class="status-pill-card status-pill-amber">
+                    <span>🟡 Pendente</span>
+                    <span class="status-badge-count">{qtd_pendentes}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with col_s2:
+            st.markdown(
+                f"""
+                <div class="status-pill-card status-pill-brown">
+                    <span>📦 Pedido Estoque</span>
+                    <span class="status-badge-count">{qtd_pedidos_est}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with col_s3:
+            st.markdown(
+                f"""
+                <div class="status-pill-card status-pill-blue">
+                    <span>📦 Pronto Estoque</span>
+                    <span class="status-badge-count">{qtd_prontos_est}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with col_s4:
+            st.markdown(
+                f"""
+                <div class="status-pill-card status-pill-gray">
+                    <span>🔵 Em Manutenção</span>
+                    <span class="status-badge-count">{qtd_manutencao}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with col_s5:
+            st.markdown(
+                f"""
+                <div class="status-pill-card status-pill-green">
+                    <span>🟢 Concluído</span>
+                    <span class="status-badge-count">{qtd_concluidos}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
         st.divider()
 
         # Filtros de Consulta e Busca Rápida por Digitação
         st.markdown("##### 🔍 Pesquisa e Filtros de Atendimentos")
 
-        # Campo de Digitação Direta (100% nativo para Celular e Computador)
+        # Campo de Digitação Direta
         col_busca_txt, col_btn_limpar = st.columns([5, 1])
         with col_busca_txt:
             termo_pesquisa = st.text_input(
-                "🔎 Digite para Buscar no Celular ou Computador:",
-                placeholder="Digite o nome da Unidade, Técnico, Material, Número do Chamado ou Setor...",
+                "Pesquisa de Atendimentos",
+                placeholder="Digite para Buscar no Celular ou Computador...",
+                label_visibility="collapsed",
                 key="filtro_pesquisa_rapida_texto"
             )
         with col_btn_limpar:
-            st.write("")
-            st.write("")
             st.button(
-                "Limpar 🔄",
+                "Limpar",
                 key="btn_limpar_busca_rapida",
                 on_click=limpar_filtro_pesquisa_rapida,
                 use_container_width=True,
@@ -1536,7 +1343,7 @@ def render_aba_consulta() -> None:
         if termo_pesquisa and termo_pesquisa.strip():
             termo_limpo = termo_pesquisa.strip().lower()
             colunas_busca = [
-                "id", "numero_chamado", "unidade_nome", "setor_nome", "tecnico_nome",
+                "id", "numero_chamado", "numero_pedido", "unidade_nome", "setor_nome", "tecnico_nome",
                 "equipamento_nome", "motivo_chamado", "observacao", "status", "porte", "zona"
             ]
             cols_ativas = [c for c in colunas_busca if c in df_filtrado.columns]
@@ -1568,7 +1375,7 @@ def render_aba_consulta() -> None:
                 try:
                     df_display[col_dt_label] = pd.to_datetime(
                         df_display[col_dt_label], errors="coerce"
-                    ).dt.strftime("%d/%m/%Y %H:%M").fillna("")
+                    ).dt.strftime("%d/%m/%Y").fillna("")
                 except Exception:
                     pass
 
@@ -1581,41 +1388,188 @@ def render_aba_consulta() -> None:
                 except Exception:
                     pass
 
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
+        # Visualização Responsiva e Otimizada da Tabela
+        col_vis_op, col_vis_cont = st.columns([3, 2])
+        with col_vis_op:
+            modo_visualizacao = st.radio(
+                "Visualização das Colunas:",
+                options=["Visão Operacional", "Visão Completa"],
+                horizontal=True,
+                label_visibility="collapsed",
+                key="radio_modo_tabela_consulta"
+            )
+        with col_vis_cont:
+            st.caption(f"Mostrando {len(df_display)} chamados de acordo com filtros.")
 
-        # Atualização Rápida de Status
-        st.divider()
-        st.markdown("##### 🔄 Atualizar Status do Atendimento")
-        col_sel_id, col_sel_st, col_btn_st = st.columns([4, 3, 2])
+        colunas_operacionais = [
+            "ID", "Chamado / Ticket", "Nº Pedido Estoque", "Status",
+            "Previsão de Retorno", "Data Solicitação", "Unidade de Saúde",
+            "Setor / Departamento", "Material / Equipamento", "Qtd",
+            "Técnico Responsável"
+        ]
 
-        with col_sel_id:
+        if modo_visualizacao == "Visão Operacional":
+            cols_ativas_view = [c for c in colunas_operacionais if c in df_display.columns]
+            df_tabela_show = df_display[cols_ativas_view]
+        else:
+            df_tabela_show = df_display
+
+        config_colunas_df = {
+            "ID": st.column_config.NumberColumn("ID", width="small", format="%d"),
+            "Chamado / Ticket": st.column_config.TextColumn("Chamado", width="small"),
+            "Nº Pedido Estoque": st.column_config.TextColumn("Pedido Estoque", width="small"),
+            "Status": st.column_config.TextColumn("Status", width="medium"),
+            "Previsão de Retorno": st.column_config.TextColumn("Previsão SLA", width="small"),
+            "Data Solicitação": st.column_config.TextColumn("Solicitação", width="small"),
+            "Unidade de Saúde": st.column_config.TextColumn("Unidade de Saúde", width="medium"),
+            "Setor / Departamento": st.column_config.TextColumn("Setor", width="medium"),
+            "Material / Equipamento": st.column_config.TextColumn("Material / Peça", width="medium"),
+            "Qtd": st.column_config.NumberColumn("Qtd", width="small", format="%d"),
+            "Técnico Responsável": st.column_config.TextColumn("Técnico", width="medium"),
+            "Porte": st.column_config.TextColumn("Porte", width="small"),
+            "Empresa / Lote": st.column_config.TextColumn("Empresa / Lote", width="small"),
+            "Zona / Região": st.column_config.TextColumn("Zona", width="small"),
+        }
+
+        st.dataframe(
+            df_tabela_show,
+            use_container_width=True,
+            hide_index=True,
+            column_config=config_colunas_df
+        )
+
+        # Atualização Rápida de Status, Pedido no Estoque & Prazo SLA em Container Neon
+        st.write("")
+        with st.container(border=True):
+            st.markdown('<span id="marker-update-neon" style="display:none;"></span>', unsafe_allow_html=True)
+            st.markdown(
+                """
+                <div class="box-update-title">
+                    <span style="font-size: 1.2rem;">🔄</span>
+                    <span>Atualização de Status, Pedido no Estoque & Prazo SLA</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
             base_chamados = df_filtrado if not df_filtrado.empty else df
             opcoes_chamados = {
-                f"Protocolo #{row['id']} | {row.get('unidade_nome', '')} ({row.get('setor_nome', '')}) - {row.get('equipamento_nome', '')}": row['id']
+                f"#{row['id']} | {row.get('unidade_nome', '')}": row['id']
                 for _, row in base_chamados.iterrows()
             }
             if not opcoes_chamados:
-                opcoes_chamados = {f"Protocolo #{row['id']}": row['id'] for _, row in df.iterrows()}
-            chamado_selecionado = st.selectbox("Selecione a Requisição:", list(opcoes_chamados.keys()))
-            id_alvo = opcoes_chamados[chamado_selecionado]
+                opcoes_chamados = {f"#{row['id']}": row['id'] for _, row in df.iterrows()}
 
-        with col_sel_st:
-            status_atual_serie = df[df['id'] == id_alvo]['status'].values if 'status' in df.columns else []
-            status_atual = status_atual_serie[0] if len(status_atual_serie) > 0 and pd.notna(status_atual_serie[0]) else OPCOES_STATUS[0]
-            idx_status = OPCOES_STATUS.index(status_atual) if status_atual in OPCOES_STATUS else 0
-            novo_status = st.selectbox("Novo Status:", OPCOES_STATUS, index=idx_status)
+            col_up_sel, col_up_ped, col_up_st, col_up_dt, col_up_btn = st.columns([3, 2, 3, 2, 2])
 
-        with col_btn_st:
-            st.write("")
-            st.write("")
-            if st.button("💾 Salvar Novo Status", use_container_width=True):
-                with st.spinner("Atualizando status no Supabase..."):
-                    ok_st, msg_st = conexao_bd.atualizar_status_requisicao(id_alvo, novo_status)
-                    if ok_st:
-                        st.success(msg_st)
-                        st.rerun()
+            with col_up_sel:
+                chamado_selecionado = st.selectbox(
+                    "Selecione a Requisição para Atualizar:",
+                    options=list(opcoes_chamados.keys()),
+                    key="sel_chamado_update"
+                )
+                id_alvo = opcoes_chamados[chamado_selecionado]
+
+            # Recupera dados atuais da linha selecionada
+            chamado_alvo_series = df[df['id'] == id_alvo]
+            chamado_alvo_dict = chamado_alvo_series.iloc[0].to_dict() if not chamado_alvo_series.empty else {}
+
+            status_raw = chamado_alvo_dict.get('status') or OPCOES_STATUS[0]
+            status_atual_val = formatar_status_para_ui(status_raw)
+            if status_atual_val not in OPCOES_STATUS:
+                status_atual_val = OPCOES_STATUS[0]
+
+            pedido_atual_val = str(chamado_alvo_dict.get('numero_pedido') or '').strip()
+            if pedido_atual_val.lower() == 'none':
+                pedido_atual_val = ''
+
+            # Parsing seguro da data prevista existente
+            raw_dt_prev = chamado_alvo_dict.get('data_prevista_retorno')
+            try:
+                if raw_dt_prev and pd.notna(raw_dt_prev):
+                    if isinstance(raw_dt_prev, str):
+                        data_prev_val = pd.to_datetime(raw_dt_prev, errors="coerce").date()
+                    elif isinstance(raw_dt_prev, (pd.Timestamp, date)):
+                        data_prev_val = raw_dt_prev if isinstance(raw_dt_prev, date) else raw_dt_prev.date()
                     else:
-                        st.error(msg_st)
+                        data_prev_val = date.today() + timedelta(days=2)
+                else:
+                    data_prev_val = date.today() + timedelta(days=2)
+                if not data_prev_val:
+                    data_prev_val = date.today() + timedelta(days=2)
+            except Exception:
+                data_prev_val = date.today() + timedelta(days=2)
+
+            is_adm_user = st.session_state.get("is_admin", False)
+
+            with col_up_ped:
+                novo_numero_pedido = st.text_input(
+                    "Nº Pedido no Estoque:",
+                    value=pedido_atual_val,
+                    placeholder="Ex: 402000",
+                    key=f"inp_pedido_{id_alvo}",
+                    help="Ao preencher o pedido no estoque, o status sugerido muda automaticamente para 'Pedido Solicitado'."
+                )
+
+            with col_up_st:
+                ped_preenchido = bool(novo_numero_pedido and novo_numero_pedido.strip())
+                if ped_preenchido and status_atual_val == OPCOES_STATUS[0]:
+                    idx_st_default = 1  # 📦 Pedido Solicitado no Estoque
+                elif status_atual_val in OPCOES_STATUS:
+                    idx_st_default = OPCOES_STATUS.index(status_atual_val)
+                else:
+                    idx_st_default = 0
+
+                novo_status = st.selectbox(
+                    "Novo Status do Atendimento:",
+                    options=OPCOES_STATUS,
+                    index=idx_st_default,
+                    key=f"sel_status_{id_alvo}"
+                )
+
+            with col_up_dt:
+                if is_adm_user:
+                    nova_data_prevista = st.date_input(
+                        "Previsão SLA (Admin):",
+                        value=data_prev_val,
+                        format="DD/MM/YYYY",
+                        key=f"dt_prev_{id_alvo}",
+                        help="🛡️ Administrador autenticado: você possui permissão para alterar ou prorrogar prazos."
+                    )
+                else:
+                    txt_data_exib = data_prev_val.strftime("%d/%m/%Y") if hasattr(data_prev_val, "strftime") else str(data_prev_val)
+                    st.text_input(
+                        "Previsão SLA (Bloqueado):",
+                        value=txt_data_exib,
+                        disabled=True,
+                        key=f"dt_prev_txt_{id_alvo}",
+                        help="🔒 Alteração de data prevista permitida exclusivamente para Administradores."
+                    )
+                    nova_data_prevista = data_prev_val
+
+            with col_up_btn:
+                st.write("")
+                st.write("")
+                if st.button("💾 Salvar Alterações", key=f"btn_salvar_up_{id_alvo}", use_container_width=True, type="primary"):
+                    status_salvar = novo_status
+                    if novo_numero_pedido.strip() and novo_status == OPCOES_STATUS[0]:
+                        status_salvar = OPCOES_STATUS[1]
+
+                    dt_salvar_str = nova_data_prevista.strftime("%Y-%m-%d") if is_adm_user else None
+
+                    with st.spinner("Atualizando requisição no Supabase..."):
+                        ok_st, msg_st = conexao_bd.atualizar_requisicao_dados(
+                            id_requisicao=id_alvo,
+                            novo_status=status_salvar,
+                            numero_pedido=novo_numero_pedido.strip(),
+                            nova_data_prevista=dt_salvar_str
+                        )
+                        if ok_st:
+                            st.success(msg_st)
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error(msg_st)
 
         # Espelho de Ordem de Serviço para Impressão e Auditoria
         with st.expander("📄 Emitir Espelho Formal da Ordem de Serviço (Impressão & Assinatura)", expanded=False):
@@ -1673,223 +1627,18 @@ def render_aba_consulta() -> None:
                     if st.session_state.get("is_admin"):
                         st.caption("🛡️ **Painel Administrador:** As assinaturas de técnicos e carimbos de postos de saúde são gerenciados centralmente na aba **⚙️ Gestão de Cadastros**.")
 
-                # Monta a data formatada
-                data_solic_fmt = ""
-                if os_row.get("data"):
-                    try:
-                        data_solic_fmt = pd.to_datetime(os_row["data"]).strftime("%d/%m/%Y %H:%M")
-                    except Exception:
-                        data_solic_fmt = str(os_row.get("data"))
-
-                data_prev_fmt = ""
-                if os_row.get("data_prevista_retorno"):
-                    try:
-                        data_prev_fmt = pd.to_datetime(os_row["data_prevista_retorno"]).strftime("%d/%m/%Y")
-                    except Exception:
-                        data_prev_fmt = str(os_row.get("data_prevista_retorno"))
-
-                # Blocos visuais de assinatura digital formatados
-                if aplicar_sig_tec and assinatura_tec_b64:
-                    bloco_sig_tec = f'<div style="min-height: 72px; height: 75px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 2px;"><img src="{assinatura_tec_b64}" style="max-height: 70px; max-width: 260px; object-fit: contain;" /></div>'
-                    selo_sig_tec = '<div style="font-size: 0.65rem; color: #0284c7; font-weight: 700; margin-top: 3px;">🔒 Documento Assinado Digitalmente • Preposto TI</div>'
-                else:
-                    bloco_sig_tec = '<div style="min-height: 72px; height: 75px;"></div>'
-                    selo_sig_tec = ''
-
-                if aplicar_sig_uni and assinatura_unidade_b64:
-                    bloco_sig_uni = f'<div style="min-height: 72px; height: 75px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 2px;"><img src="{assinatura_unidade_b64}" style="max-height: 70px; max-width: 260px; object-fit: contain;" /></div>'
-                    selo_sig_uni = '<div style="font-size: 0.65rem; color: #16a34a; font-weight: 700; margin-top: 3px;">✅ Recebimento Validado na Unidade</div>'
-                else:
-                    bloco_sig_uni = '<div style="min-height: 72px; height: 75px;"></div>'
-                    selo_sig_uni = ''
-
-                termo_html = f"""<div class="gov-os-voucher" id="os-voucher-print">
-<div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 16px;">
-<div>
-<div style="font-size: 0.75rem; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.05em;">ORDEM DE SERVIÇO &amp; TERMO DE ATENDIMENTO TI</div>
-<div style="font-size: 1.25rem; font-weight: 800; color: #0f172a;">COMPROVANTE TÉCNICO #{os_row.get('id', 'N/A')}</div>
-<div style="font-size: 0.8rem; color: #64748b;">Chamado / Ticket Oficial: <strong>{os_row.get('numero_chamado') or 'NÃO INFORMADO'}</strong></div>
-</div>
-<div style="text-align: right; font-size: 0.8rem; color: #475569;">
-<div><strong>Data de Abertura:</strong> {data_solic_fmt or 'Hoje'}</div>
-<div><strong>Previsão de Retorno:</strong> {data_prev_fmt or 'Imediato'}</div>
-<div><strong>Status:</strong> <span style="font-weight: 700;">{os_row.get('status', 'Pendente')}</span></div>
-</div>
-</div>
-<table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; font-size: 0.85rem;">
-<tr style="background: #f8fafc;">
-<td style="padding: 8px 12px; border: 1px solid #cbd5e1; width: 50%;"><strong>Unidade de Saúde:</strong> {os_row.get('unidade_nome', 'N/A')}</td>
-<td style="padding: 8px 12px; border: 1px solid #cbd5e1; width: 50%;"><strong>Porte da Unidade:</strong> {os_row.get('porte', 'N/A')}</td>
-</tr>
-<tr>
-<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Setor / Sala:</strong> {os_row.get('setor_nome', 'N/A')}</td>
-<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Zona / Região:</strong> {os_row.get('zona', 'N/A')} | <strong>Lote:</strong> {os_row.get('empresa', 'N/A')}</td>
-</tr>
-<tr style="background: #f8fafc;">
-<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Técnico Responsável:</strong> {os_row.get('tecnico_nome', 'N/A')}</td>
-<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Tipo de Visita:</strong> {os_row.get('tipo_visita', 'N/A')}</td>
-</tr>
-<tr>
-<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Material / Equipamento:</strong> {os_row.get('equipamento_nome', 'N/A')}</td>
-<td style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Quantidade Movimentada:</strong> {os_row.get('quantidade', 1)} unidade(s)</td>
-</tr>
-<tr style="background: #f8fafc;">
-<td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Motivo do Chamado:</strong> {os_row.get('motivo_chamado', 'N/A')}</td>
-</tr>
-<tr>
-<td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Serviço Realizado:</strong> {os_row.get('servico_realizado', 'N/A')}</td>
-</tr>
-<tr style="background: #f8fafc;">
-<td colspan="2" style="padding: 8px 12px; border: 1px solid #cbd5e1;"><strong>Observações / Laudo Técnico:</strong> {os_row.get('observacao') or 'Sem observações adicionais.'}</td>
-</tr>
-</table>
-<div style="margin-top: 32px; display: flex; justify-content: space-between; gap: 40px; padding-top: 20px;">
-<div style="flex: 1; text-align: center;">
-{bloco_sig_tec}
-<div style="border-top: 1.5px solid #334155; padding-top: 6px; font-size: 0.85rem; font-weight: 700; color: #0f172a;">{tecnico_nome_os or 'Técnico de TI'}</div>
-<div style="font-size: 0.72rem; color: #64748b;">Técnico Responsável / Preposto TI</div>
-{selo_sig_tec}
-</div>
-<div style="flex: 1; text-align: center;">
-{bloco_sig_uni}
-<div style="border-top: 1.5px solid #334155; padding-top: 6px; font-size: 0.85rem; font-weight: 700; color: #0f172a;">{nome_resp_unidade}</div>
-<div style="font-size: 0.72rem; color: #64748b;">{cargo_resp_unidade} • {os_row.get('unidade_nome', 'Posto de Trabalho')}</div>
-{selo_sig_uni}
-</div>
-</div>
-</div>"""
+                termo_html = gerar_termo_html(
+                    os_row=os_row,
+                    assinatura_tec_b64=assinatura_tec_b64,
+                    assinatura_unidade_b64=assinatura_unidade_b64,
+                    aplicar_sig_tec=aplicar_sig_tec,
+                    aplicar_sig_uni=aplicar_sig_uni,
+                    nome_resp_unidade=nome_resp_unidade,
+                    cargo_resp_unidade=cargo_resp_unidade
+                )
                 st.markdown(termo_html, unsafe_allow_html=True)
-
-                # Monta a página HTML completa para download / impressão
-                nome_arq_limpo = f"comprovante_os_{os_row.get('id', 'N/A')}_{str(os_row.get('unidade_nome', 'TI')).replace(' ', '_')}.html"
-                doc_html_completo = f"""<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ordem de Serviço #{os_row.get('id', 'N/A')} - {os_row.get('unidade_nome', 'TI')}</title>
-<style>
-@page {{ size: A4 portrait; margin: 10mm 15mm; }}
-* {{ box-sizing: border-box; }}
-body {{
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: #f8fafc;
-    color: #0f172a;
-    margin: 0;
-    padding: 20px;
-}}
-.folha-a4 {{
-    max-width: 860px;
-    margin: 0 auto;
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    padding: 24px;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
-}}
-.barra-acoes {{
-    max-width: 860px;
-    margin: 0 auto 16px auto;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-}}
-.btn-acao {{
-    background: #0284c7;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 6px;
-    font-size: 0.95rem;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(2,132,199,0.3);
-}}
-.btn-acao:hover {{ background: #0369a1; }}
-@media print {{
-    body {{ background: #ffffff !important; padding: 0 !important; margin: 0 !important; }}
-    .barra-acoes {{ display: none !important; }}
-    .folha-a4 {{ border: none !important; box-shadow: none !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; }}
-}}
-</style>
-</head>
-<body>
-<div class="barra-acoes">
-    <button class="btn-acao" onclick="window.print()">🖨️ Imprimir Agora (Ctrl + P)</button>
-</div>
-<div class="folha-a4">
-{termo_html}
-</div>
-</body>
-</html>"""
-
                 st.write("")
-                col_btn_print1, col_btn_print2 = st.columns(2)
-                with col_btn_print1:
-                    st.download_button(
-                        label="📥 Baixar Comprovante Oficial (.html / PDF)",
-                        data=doc_html_completo.encode("utf-8"),
-                        file_name=nome_arq_limpo,
-                        mime="text/html",
-                        use_container_width=True,
-                        key=f"btn_download_os_{id_alvo}",
-                        help="Baixa o documento oficial formatado para abrir no navegador ou salvar diretamente como PDF."
-                    )
-
-                with col_btn_print2:
-                    js_popup_impressao = f"""
-                    <div style="display: flex; align-items: center; justify-content: center; height: 100%;">
-                        <button onclick="imprimirComprovanteDireto()" style="
-                            width: 100%;
-                            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-                            color: white;
-                            border: none;
-                            padding: 10px 16px;
-                            border-radius: 8px;
-                            font-size: 0.95rem;
-                            font-weight: 700;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            justify-content: center;
-                            gap: 8px;
-                            box-shadow: 0 2px 5px rgba(2, 132, 199, 0.3);
-                        ">
-                            🖨️ Imprimir Ordem de Serviço Direto
-                        </button>
-                    </div>
-                    <script>
-                    function imprimirComprovanteDireto() {{
-                        try {{
-                            var el = window.parent.document.getElementById('os-voucher-print');
-                            if (!el) {{
-                                window.parent.print();
-                                return;
-                            }}
-                            var w = window.open('', '_blank', 'width=880,height=800');
-                            w.document.write('<!DOCTYPE html><html><head><title>Ordem de Serviço #{os_row.get('id', 'N/A')}</title>');
-                            w.document.write('<style>');
-                            w.document.write('@page {{ size: A4 portrait; margin: 10mm; }}');
-                            w.document.write('* {{ box-sizing: border-box; }}');
-                            w.document.write('body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; margin: 0; padding: 15px; background: #fff; color: #0f172a; }}');
-                            w.document.write('.gov-os-voucher {{ border: 1px solid #cbd5e1; border-radius: 8px; padding: 20px; }}');
-                            w.document.write('table {{ width: 100%; border-collapse: collapse; }}');
-                            w.document.write('td {{ border: 1px solid #cbd5e1; padding: 8px 12px; font-size: 0.85rem; }}');
-                            w.document.write('</style></head><body>');
-                            w.document.write(el.outerHTML);
-                            w.document.write('</body></html>');
-                            w.document.close();
-                            w.focus();
-                            setTimeout(function() {{ w.print(); }}, 250);
-                        }} catch (e) {{
-                            window.parent.print();
-                        }}
-                    }}
-                    </script>
-                    """
-                    components.html(js_popup_impressao, height=52)
-
-                st.caption("💡 Dica: Você pode imprimir diretamente pelo botão acima ou baixar o documento e salvar em PDF.")
+                render_acoes_impressao_voucher(os_row, termo_html, id_alvo)
 
         # Exportação para CSV / Excel
         st.divider()
@@ -1945,6 +1694,7 @@ def render_aba_admin() -> None:
         st.subheader("⚙️ Painel de Gestão de Cadastros")
     with col_t2:
         if st.button("🔄 Atualizar", key="btn_att_admin", use_container_width=True):
+            conexao_bd.limpar_cache_dados()
             st.rerun()
 
     if not st.session_state["is_admin"]:
@@ -1968,6 +1718,7 @@ def render_aba_admin() -> None:
             st.markdown("#### 🏢 Gestão de Setores")
         with c_s2:
             if st.button("🔄 Atualizar", key="btn_att_sub_setores", use_container_width=True):
+                conexao_bd.limpar_cache_dados()
                 st.rerun()
 
         with st.form(key="form_novo_setor", clear_on_submit=True):
@@ -2008,6 +1759,7 @@ def render_aba_admin() -> None:
             st.markdown("#### 🏥 Gestão de Unidades de Saúde")
         with c_u2:
             if st.button("🔄 Atualizar", key="btn_att_sub_unidades", use_container_width=True):
+                conexao_bd.limpar_cache_dados()
                 st.rerun()
 
         with st.form(key="form_nova_unidade", clear_on_submit=True):
@@ -2112,6 +1864,7 @@ def render_aba_admin() -> None:
             st.markdown("#### 👨‍💻 Gestão de Técnicos")
         with c_t2:
             if st.button("🔄 Atualizar", key="btn_att_sub_tecnicos", use_container_width=True):
+                conexao_bd.limpar_cache_dados()
                 st.rerun()
 
         with st.form(key="form_novo_tecnico", clear_on_submit=True):
@@ -2191,6 +1944,7 @@ def render_aba_admin() -> None:
             st.markdown("#### 📦 Gestão de Equipamentos / Materiais")
         with c_e2:
             if st.button("🔄 Atualizar", key="btn_att_sub_equipamentos", use_container_width=True):
+                conexao_bd.limpar_cache_dados()
                 st.rerun()
 
         with st.form(key="form_novo_eq", clear_on_submit=True):
@@ -2222,6 +1976,7 @@ def render_aba_admin() -> None:
             st.markdown("#### 👥 Gestão de Contas e Senhas dos Técnicos (Supabase Auth)")
         with c_u2:
             if st.button("🔄 Atualizar", key="btn_att_sub_usuarios_auth", use_container_width=True):
+                conexao_bd.limpar_cache_dados()
                 st.rerun()
 
         st.write("Crie novas contas ativadas para os técnicos e redefina senhas diretamente pelo sistema, sem precisar que o técnico confirme nada por e-mail.")

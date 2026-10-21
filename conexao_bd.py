@@ -13,6 +13,11 @@ import time
 from typing import Optional, List, Dict, Any, Tuple
 import streamlit as st
 from supabase import create_client, Client
+from constantes import (
+    remover_emojis,
+    formatar_status_para_banco,
+    formatar_status_para_ui
+)
 
 # Nomes padronizados das tabelas no banco de dados (evita magic strings)
 TABLE_UNIDADES = "unidades"
@@ -34,6 +39,17 @@ def iniciar_conexao() -> Client:
     url: str = st.secrets["SUPABASE_URL"].strip()
     key: str = st.secrets["SUPABASE_KEY"].strip()
     return create_client(url, key)
+
+
+def limpar_cache_dados() -> None:
+    """
+    Invalida o cache de dados em memória do Streamlit (@st.cache_data),
+    forçando as consultas a buscar dados atualizados do Supabase.
+    """
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
 
 
 # ==============================================================================
@@ -267,6 +283,7 @@ def identificar_tecnico_por_email(email: Optional[str]) -> Optional[Dict[str, An
 # CONSULTAS AOS CATÁLOGOS RELACIONAIS (UNIDADES, SETORES, TÉCNICOS, EQUIPAMENTOS)
 # ==============================================================================
 
+@st.cache_data(ttl=180, show_spinner=False)
 def buscar_unidades(porte: Optional[str] = None) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Busca unidades de saúde cadastradas no Supabase com suporte a filtro por porte.
@@ -296,6 +313,7 @@ def buscar_unidades(porte: Optional[str] = None) -> Tuple[List[Dict[str, Any]], 
         return [], str(exc)
 
 
+@st.cache_data(ttl=180, show_spinner=False)
 def buscar_setores(porte: Optional[str] = None) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Busca setores cadastrados no Supabase com suporte a filtro estrito por porte.
@@ -325,6 +343,7 @@ def buscar_setores(porte: Optional[str] = None) -> Tuple[List[Dict[str, Any]], O
         return [], str(exc)
 
 
+@st.cache_data(ttl=180, show_spinner=False)
 def buscar_tecnicos() -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Busca a lista de técnicos cadastrados no banco de dados.
@@ -340,6 +359,7 @@ def buscar_tecnicos() -> Tuple[List[Dict[str, Any]], Optional[str]]:
         return [], str(exc)
 
 
+@st.cache_data(ttl=180, show_spinner=False)
 def buscar_equipamentos() -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Busca a lista de equipamentos cadastrados no banco de dados.
@@ -372,59 +392,134 @@ def inserir_requisicao(dados_requisicao: Dict[str, Any]) -> Tuple[bool, str, Opt
     """
     try:
         supabase = iniciar_conexao()
+        status_salvar = formatar_status_para_banco(dados_requisicao.get("status"))
         payload: Dict[str, Any] = {
             "tecnico_id": dados_requisicao.get("tecnico_id"),
             "unidade_id": dados_requisicao.get("unidade_id"),
             "setor_id": dados_requisicao.get("setor_id"),
             "equipamento_id": dados_requisicao.get("equipamento_id"),
-            "tipo_visita": dados_requisicao.get("tipo_visita") or "",
-            "servico_realizado": dados_requisicao.get("servico_realizado") or "",
+            "tipo_visita": remover_emojis(dados_requisicao.get("tipo_visita") or ""),
+            "servico_realizado": remover_emojis(dados_requisicao.get("servico_realizado") or ""),
             "quantidade": dados_requisicao.get("quantidade", 1),
-            "status": dados_requisicao.get("status") or "🟡 Pendente / Aguardando Peça",
-            # Mapeamento compatível com o schema do Supabase
-            "ticket": dados_requisicao.get("ticket") or dados_requisicao.get("numero_chamado") or "",
-            "motivo": dados_requisicao.get("motivo") or dados_requisicao.get("motivo_chamado") or "",
+            "status": status_salvar,
+            # Mapeamento compatível com o schema do Supabase (Sem emojis - Padrão DBA)
+            "ticket": remover_emojis(dados_requisicao.get("ticket") or dados_requisicao.get("numero_chamado") or ""),
+            "motivo": remover_emojis(dados_requisicao.get("motivo") or dados_requisicao.get("motivo_chamado") or ""),
             "data_prevista": dados_requisicao.get("data_prevista") or dados_requisicao.get("data_prevista_retorno") or None,
-            "descricao": dados_requisicao.get("descricao") or dados_requisicao.get("observacao") or "",
+            "descricao": remover_emojis(dados_requisicao.get("descricao") or dados_requisicao.get("observacao") or ""),
+            "numero_pedido": remover_emojis(dados_requisicao.get("numero_pedido") or ""),
         }
 
         try:
             resposta = supabase.table(TABLE_REQUISICOES).insert(payload).execute()
             registro = resposta.data[0] if resposta.data else None
+            limpar_cache_dados()
             return True, "Requisição gravada com sucesso no Supabase!", registro
         except Exception as inner_exc:
             msg = str(inner_exc)
+            # Se a coluna numero_pedido ainda não existir no banco, grava sem ela
+            if "numero_pedido" in msg:
+                payload_sem_np = {k: v for k, v in payload.items() if k != "numero_pedido"}
+                resposta = supabase.table(TABLE_REQUISICOES).insert(payload_sem_np).execute()
+                registro = resposta.data[0] if resposta.data else None
+                limpar_cache_dados()
+                return True, "Requisição gravada com sucesso no Supabase!", registro
+
             # Caso o banco tenha outros nomes de colunas ou chaves básicas
             if "Could not find the" in msg or "does not exist" in msg:
                 chaves_basicas = ["tecnico_id", "unidade_id", "setor_id", "equipamento_id"]
                 dados_filtrados = {k: v for k, v in dados_requisicao.items() if k in chaves_basicas}
                 resposta = supabase.table(TABLE_REQUISICOES).insert(dados_filtrados).execute()
                 registro = resposta.data[0] if resposta.data else None
+                limpar_cache_dados()
                 return True, "Requisição gravada com sucesso no Supabase!", registro
             raise inner_exc
     except Exception as exc:
         return False, f"Erro ao gravar no banco de dados: {str(exc)}", None
 
 
-def atualizar_status_requisicao(id_requisicao: int, novo_status: str) -> Tuple[bool, str]:
+def atualizar_requisicao_dados(
+    id_requisicao: int,
+    novo_status: Optional[str] = None,
+    numero_pedido: Optional[str] = None,
+    nova_data_prevista: Optional[str] = None,
+    status: Optional[str] = None,
+    data_prevista: Optional[str] = None,
+    **kwargs: Any
+) -> Tuple[bool, str]:
     """
-    Atualiza o status de atendimento de um chamado pelo seu ID.
+    Atualiza status, número do pedido no estoque e/ou data prevista de retorno de um chamado.
+    Compatível com os nomes de argumentos 'novo_status'/'status' e 'nova_data_prevista'/'data_prevista'.
 
     Args:
-        id_requisicao (int): Identificador único da requisição.
-        novo_status (str): Novo valor do status.
+        id_requisicao (int): ID da requisição no banco.
+        novo_status (Optional[str]): Novo status de ciclo de vida / estoque.
+        numero_pedido (Optional[str]): Número do pedido emitido no estoque.
+        nova_data_prevista (Optional[str]): Data prevista no formato YYYY-MM-DD.
+        status (Optional[str]): Alias para novo_status.
+        data_prevista (Optional[str]): Alias para nova_data_prevista.
 
     Returns:
         Tuple[bool, str]: Sucesso e mensagem descritiva.
     """
     try:
         supabase = iniciar_conexao()
-        supabase.table(TABLE_REQUISICOES).update({"status": novo_status}).eq("id", id_requisicao).execute()
-        return True, f"Status do chamado #{id_requisicao} atualizado com sucesso!"
+        payload: Dict[str, Any] = {}
+
+        status_val = novo_status if novo_status is not None else status
+        if status_val is not None:
+            payload["status"] = formatar_status_para_banco(status_val)
+
+        if numero_pedido is not None:
+            payload["numero_pedido"] = remover_emojis(numero_pedido.strip())
+
+        data_val = nova_data_prevista if nova_data_prevista is not None else data_prevista
+        if data_val is not None:
+            # Em produção no Supabase a coluna se chama 'data_prevista'
+            payload["data_prevista"] = data_val
+
+        if not payload:
+            return True, "Nenhuma alteração a ser salva."
+
+        try:
+            supabase.table(TABLE_REQUISICOES).update(payload).eq("id", id_requisicao).execute()
+        except Exception as inner_exc:
+            msg = str(inner_exc)
+            # Se o banco esperar 'data_prevista_retorno' em vez de 'data_prevista'
+            if "data_prevista" in msg and "Could not find the 'data_prevista'" in msg:
+                payload_alt = dict(payload)
+                if "data_prevista" in payload_alt:
+                    payload_alt["data_prevista_retorno"] = payload_alt.pop("data_prevista")
+                try:
+                    supabase.table(TABLE_REQUISICOES).update(payload_alt).eq("id", id_requisicao).execute()
+                    limpar_cache_dados()
+                    return True, f"Chamado #{id_requisicao} atualizado com sucesso!"
+                except Exception as ex2:
+                    msg = str(ex2)
+
+            # Fallback se a coluna numero_pedido ainda não existir no Supabase
+            if "numero_pedido" in msg or "Could not find the 'numero_pedido'" in msg:
+                payload_fallback = {k: v for k, v in payload.items() if k != "numero_pedido"}
+                if payload_fallback:
+                    supabase.table(TABLE_REQUISICOES).update(payload_fallback).eq("id", id_requisicao).execute()
+            else:
+                raise inner_exc
+
+        limpar_cache_dados()
+        return True, f"Chamado #{id_requisicao} atualizado com sucesso!"
     except Exception as exc:
-        return False, f"Erro ao atualizar status: {str(exc)}"
+        return False, f"Erro ao atualizar chamado: {str(exc)}"
 
 
+def atualizar_status_requisicao(id_requisicao: int, novo_status: str) -> Tuple[bool, str]:
+    """
+    Atualiza o status de atendimento de um chamado pelo seu ID.
+    """
+    return atualizar_requisicao_dados(id_requisicao, novo_status=novo_status)
+
+
+
+@st.cache_data(ttl=120, show_spinner=False)
 def buscar_requisicoes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Busca todo o histórico de requisições realizando JOIN automático com
@@ -464,9 +559,10 @@ def buscar_requisicoes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
 
                 # Valores padrão seguros para garantir robustez no dashboard
                 d["data"] = d.get("data") or d.get("data_criacao") or ""
-                d["status"] = d.get("status") or "🟡 Pendente / Aguardando Peça"
+                d["status"] = formatar_status_para_ui(d.get("status"))
                 d["quantidade"] = d.get("quantidade") or 1
                 d["numero_chamado"] = d.get("numero_chamado") or d.get("ticket") or ""
+                d["numero_pedido"] = d.get("numero_pedido") or ""
                 d["motivo_chamado"] = d.get("motivo_chamado") or d.get("motivo") or ""
                 d["tipo_visita"] = d.get("tipo_visita") or ""
                 d["servico_realizado"] = d.get("servico_realizado") or ""
@@ -478,7 +574,13 @@ def buscar_requisicoes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
         except Exception:
             # Fallback caso os relacionamentos ainda não tenham chaves estrangeiras
             resposta_simples = supabase.table(TABLE_REQUISICOES).select("*").order("id", desc=True).execute()
-            return resposta_simples.data or [], None
+            dados_simples = []
+            for item in (resposta_simples.data or []):
+                d_s = dict(item)
+                d_s["status"] = formatar_status_para_ui(d_s.get("status"))
+                d_s["data_prevista_retorno"] = d_s.get("data_prevista_retorno") or d_s.get("data_prevista") or ""
+                dados_simples.append(d_s)
+            return dados_simples, None
     except Exception as exc:
         return [], str(exc)
 
@@ -487,6 +589,7 @@ def buscar_requisicoes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
 # OPERAÇÕES ADMINISTRATIVAS (GESTÃO DE CADASTROS)
 # ==============================================================================
 
+@st.cache_data(ttl=180, show_spinner=False)
 def buscar_itens_tabela(nome_tabela: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Retorna todos os registros de uma tabela informada para exibição no painel administrativo.
@@ -507,7 +610,7 @@ def buscar_itens_tabela(nome_tabela: str) -> Tuple[List[Dict[str, Any]], Optiona
 
 def inserir_item_tabela(nome_tabela: str, dados: Dict[str, Any]) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
     """
-    Insere um novo registro em uma tabela auxiliar de catálogo.
+    Insere um novo registro em uma tabela auxiliar de catálogo higienizando textos para padrão DBA.
 
     Args:
         nome_tabela (str): Nome da tabela alvo.
@@ -518,8 +621,13 @@ def inserir_item_tabela(nome_tabela: str, dados: Dict[str, Any]) -> Tuple[bool, 
     """
     try:
         supabase = iniciar_conexao()
-        res = supabase.table(nome_tabela).insert(dados).execute()
+        dados_higienizados = {
+            k: (remover_emojis(v) if isinstance(v, str) else v)
+            for k, v in dados.items()
+        }
+        res = supabase.table(nome_tabela).insert(dados_higienizados).execute()
         registro = res.data[0] if res.data else None
+        limpar_cache_dados()
         return True, "Item cadastrado com sucesso!", registro
     except Exception as exc:
         return False, f"Erro ao cadastrar: {str(exc)}", None
@@ -539,6 +647,7 @@ def excluir_item_tabela(nome_tabela: str, id_item: int) -> Tuple[bool, str]:
     try:
         supabase = iniciar_conexao()
         supabase.table(nome_tabela).delete().eq("id", id_item).execute()
+        limpar_cache_dados()
         return True, "Item excluído com sucesso!"
     except Exception as exc:
         return False, f"Erro ao excluir: {str(exc)}"
@@ -553,12 +662,14 @@ def testar_conexao() -> Tuple[bool, str]:
     """
     try:
         st.cache_resource.clear()
+        limpar_cache_dados()
         supabase = iniciar_conexao()
         supabase.table(TABLE_UNIDADES).select("id").limit(1).execute()
         supabase.table(TABLE_SETORES).select("id").limit(1).execute()
         return True, "✅ Conexão com o Supabase e tabelas relacionais funcionando perfeitamente!"
     except Exception as exc:
         return False, f"❌ Erro de conexão com o banco de dados: {str(exc)}"
+
 
 
 # ==============================================================================
@@ -739,6 +850,7 @@ def salvar_assinatura_tecnico_db(tecnico_id: int, b64_assinatura: str, nome: Opt
     """Salva a assinatura digital vinculada ao técnico no Supabase e no arquivo local."""
     try:
         chaves = [f"tecnico_{tecnico_id}"]
+
         if nome:
             chaves.append(nome)
         for k in chaves:
@@ -750,11 +862,13 @@ def salvar_assinatura_tecnico_db(tecnico_id: int, b64_assinatura: str, nome: Opt
         except Exception:
             pass
 
+        limpar_cache_dados()
         return True, "Assinatura do técnico salva com sucesso no sistema!"
     except Exception as exc:
         return False, f"Erro ao salvar assinatura: {str(exc)}"
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def carregar_assinatura_tecnico_db(tecnico_id: Optional[int], nome: Optional[str] = None) -> Optional[str]:
     """Recupera a assinatura do técnico do Supabase ou do cache do sistema."""
     chaves = []
@@ -805,11 +919,13 @@ def salvar_assinatura_unidade_db(
         except Exception:
             pass
 
+        limpar_cache_dados()
         return True, "Assinatura e carimbo da unidade gravados com sucesso no sistema!"
     except Exception as exc:
         return False, f"Erro ao salvar assinatura da unidade: {str(exc)}"
 
 
+@st.cache_data(ttl=300, show_spinner=False)
 def carregar_assinatura_unidade_db(unidade_id: Optional[int], nome_unidade: Optional[str] = None) -> Dict[str, Optional[str]]:
     """Recupera a assinatura, nome e cargo do responsável da unidade vinculada."""
     resultado: Dict[str, Optional[str]] = {"assinatura": None, "nome_responsavel": None, "cargo_responsavel": None}
