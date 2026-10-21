@@ -21,7 +21,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import conexao_bd
-importlib.reload(conexao_bd)
 from conexao_bd import (
     gerar_token_sessao,
     validar_token_sessao,
