@@ -1452,22 +1452,39 @@ def render_aba_consulta() -> None:
             )
 
             base_chamados = df_filtrado if not df_filtrado.empty else df
-            opcoes_chamados = {
-                f"#{row['id']} | {row.get('unidade_nome', '')}": row['id']
-                for _, row in base_chamados.iterrows()
-            }
+            opcoes_chamados = {}
+            for _, row in base_chamados.iterrows():
+                rid = row['id']
+                chamado_num = str(row.get('numero_chamado') or row.get('ticket') or '').strip()
+                unidade = str(row.get('unidade_nome') or row.get('unidade') or '').strip()
+                setor = str(row.get('setor_nome') or row.get('setor') or '').strip()
+                material = str(row.get('equipamento_nome') or row.get('item_solicitado') or 'Material').strip()
+                tecnico = str(row.get('tecnico_nome') or row.get('tecnico_responsavel') or '').strip()
+
+                partes = [f"Protocolo #{rid}"]
+                if chamado_num:
+                    partes.append(f"Chamado: {chamado_num}")
+                if unidade:
+                    partes.append(f"UBS: {unidade}")
+                if setor:
+                    partes.append(f"({setor})")
+                partes.append(f"• {material}")
+                if tecnico:
+                    partes.append(f"[{tecnico}]")
+
+                label = " | ".join(partes)
+                opcoes_chamados[label] = rid
+
             if not opcoes_chamados:
-                opcoes_chamados = {f"#{row['id']}": row['id'] for _, row in df.iterrows()}
+                opcoes_chamados = {f"Protocolo #{row['id']}": row['id'] for _, row in df.iterrows()}
 
-            col_up_sel, col_up_ped, col_up_st, col_up_dt, col_up_btn = st.columns([3, 2, 3, 2, 2])
-
-            with col_up_sel:
-                chamado_selecionado = st.selectbox(
-                    "Selecione a Requisição para Atualizar:",
-                    options=list(opcoes_chamados.keys()),
-                    key="sel_chamado_update"
-                )
-                id_alvo = opcoes_chamados[chamado_selecionado]
+            chamado_selecionado = st.selectbox(
+                "Selecione a Requisição / Ordem de Serviço para Atualizar:",
+                options=list(opcoes_chamados.keys()),
+                key="sel_chamado_update",
+                help="Selecione qualquer requisição para visualizar seus dados, alterar o status, cadastrar pedido de estoque ou ajustar prazo SLA."
+            )
+            id_alvo = opcoes_chamados[chamado_selecionado]
 
             # Recupera dados atuais da linha selecionada
             chamado_alvo_series = df[df['id'] == id_alvo]
@@ -1500,6 +1517,22 @@ def render_aba_consulta() -> None:
                 data_prev_val = date.today() + timedelta(days=2)
 
             is_adm_user = st.session_state.get("is_admin", False)
+
+            # Card de Resumo Rápido da O.S. Selecionada
+            st.markdown(
+                f"""
+                <div style="background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 10px 14px; margin: 8px 0 16px 0; font-size: 0.86rem; color: #94a3b8; display: flex; flex-wrap: wrap; gap: 14px; align-items: center;">
+                    <span>🎫 <strong>Chamado:</strong> <code style="color: #38bdf8; background: #0f172a; padding: 2px 6px; border-radius: 4px;">{chamado_alvo_dict.get('numero_chamado') or 'Sem Ticket'}</code></span>
+                    <span>🏥 <strong>Unidade:</strong> <strong style="color: #f1f5f9;">{chamado_alvo_dict.get('unidade_nome') or 'Não informada'}</strong></span>
+                    <span>🏷️ <strong>Setor:</strong> <strong style="color: #f1f5f9;">{chamado_alvo_dict.get('setor_nome') or 'Geral'}</strong></span>
+                    <span>💻 <strong>Material:</strong> <strong style="color: #f1f5f9;">{chamado_alvo_dict.get('equipamento_nome') or 'Peça de TI'}</strong></span>
+                    <span>👨‍💻 <strong>Técnico:</strong> <strong style="color: #f1f5f9;">{chamado_alvo_dict.get('tecnico_nome') or 'Técnico Responsável'}</strong></span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+            col_up_ped, col_up_st, col_up_dt, col_up_btn = st.columns([3, 3, 3, 3])
 
             with col_up_ped:
                 novo_numero_pedido = st.text_input(
@@ -1564,6 +1597,7 @@ def render_aba_consulta() -> None:
                             nova_data_prevista=dt_salvar_str
                         )
                         if ok_st:
+                            conexao_bd.limpar_cache_dados()
                             st.success(msg_st)
                             time.sleep(0.5)
                             st.rerun()

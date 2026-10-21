@@ -471,7 +471,8 @@ def atualizar_requisicao_dados(
             payload["status"] = formatar_status_para_banco(status_val)
 
         if numero_pedido is not None:
-            payload["numero_pedido"] = remover_emojis(numero_pedido.strip())
+            num_ped_limpo = remover_emojis(numero_pedido.strip())
+            payload["numero_pedido"] = num_ped_limpo if num_ped_limpo else None
 
         data_val = nova_data_prevista if nova_data_prevista is not None else data_prevista
         if data_val is not None:
