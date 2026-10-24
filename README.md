@@ -50,9 +50,9 @@ gestao-equipamentos/
 
 ## 🔐 Segurança e Autenticação
 
-1. **Supabase Auth (Lark Suite / E-mails Corporativos)**:
-   - Os técnicos autenticam-se com e-mail e senha corporativos cadastrados diretamente no painel do Supabase.
-   - O sistema detecta o nome do técnico a partir do e-mail corporativo para pré-preenchimento automático no formulário.
+1. **Supabase Auth (Autenticação Nativa Supabase)**:
+   - Os usuários e técnicos autenticam-se com e-mail e senha cadastrados diretamente no Supabase Auth.
+   - O sistema detecta o nome do técnico a partir do e-mail cadastrado para vinculação e preenchimento automático nas ordens de serviço.
 2. **Senha Mestra Administrativa (Contingência)**:
    - Expander exclusivo para administradores acessarem o painel de emergência caso haja interrupção temporária de internet ou autenticação federada.
 3. **Gestão de Segredos**:

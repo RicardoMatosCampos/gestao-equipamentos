@@ -397,7 +397,7 @@ def render_tela_login() -> None:
         # Formulário Unificado de Autenticação Corporativa (Seguro e Institucional)
         with st.form(key="form_login_principal"):
             st.markdown("##### 👤 Autenticação de Usuário")
-            email_login = st.text_input("E-mail Funcional (Lark Suite / TI) *", placeholder="ex: seu.nome@empresa.com.br")
+            email_login = st.text_input("E-mail de Acesso (Supabase Auth) *", placeholder="ex: seu.nome@empresa.com.br")
             senha_login = st.text_input("Senha de Acesso *", type="password", placeholder="Digite sua senha...")
 
             destino_inicial = st.radio(
@@ -686,19 +686,125 @@ def render_aba_dashboard() -> None:
     df_dash["em_atraso"] = df_dash.apply(verificar_atraso, axis=1)
     total_atrasados = int(df_dash["em_atraso"].sum())
 
-    # CARDS DE KPIS EXECUTIVOS & SLA CONTRATUAL
-    st.markdown("##### 📈 Indicadores Chave de Desempenho & SLA")
-    k1, k2, k3, k4, k5 = st.columns(5)
-    k1.metric("📋 Total de O.S.", f"{total_chamados}", f"{total_pecas} materiais/peças")
-    k2.metric("🎯 Resolução Global", f"{taxa_resolucao:.1f}%", f"{concluidos} concluídos")
-    k3.metric("🛡️ Índice Preventivo", f"{taxa_preventiva:.1f}%", f"{qtd_preventivas} preventivas")
-    
+    # BANNER DE CONFORMIDADE DE SLA (IDÊNTICO AO APP MOBILE)
     if total_atrasados > 0:
-        k4.metric("⚠️ O.S. em Atraso", f"{total_atrasados}", "Prazo expirado", delta_color="inverse")
+        st.markdown(
+            f"""
+            <div style="background: rgba(239, 68, 68, 0.12); border: 1.5px solid #ef4444; border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.6rem;">⚠️</span>
+                <div>
+                    <div style="font-weight: 700; color: #f87171; font-size: 0.95rem;">Atenção: {total_atrasados} ordem(ns) de serviço em atraso!</div>
+                    <div style="color: #cbd5e1; font-size: 0.82rem;">Existem chamados com prazo estipulado de SLA expirado que requerem intervenção prioritária.</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
     else:
-        k4.metric("✅ Prazos de SLA", "100%", "Em conformidade")
+        st.markdown(
+            """
+            <div style="background: rgba(16, 185, 129, 0.12); border: 1.5px solid #10b981; border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.6rem;">🛡️</span>
+                <div>
+                    <div style="font-weight: 700; color: #34d399; font-size: 0.95rem;">Conformidade de SLA</div>
+                    <div style="color: #cbd5e1; font-size: 0.82rem;">Todas as ordens de serviço ativas estão dentro do prazo estipulado.</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-    k5.metric("🏥 Postos Assistidos", f"{df_dash['unidade_nome'].nunique() if 'unidade_nome' in df_dash.columns else 0}", "Unidades ativas")
+    # CARDS DE KPIS EXECUTIVOS (PADRÃO APP MOBILE 2x3 / 3x2 RESPONSIVO)
+    postos_atendidos = df_dash['unidade_nome'].nunique() if 'unidade_nome' in df_dash.columns else 0
+    total_estoque = pedidos_estoque + prontos_estoque
+
+    col_k1, col_k2, col_k3 = st.columns(3)
+    with col_k1:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Total de O.S.</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(15, 118, 110, 0.15); color: #0d9488;">📋</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #0d9488;">{total_chamados}</div>
+                <div class="kpi-card-exec-sub">{total_pecas} materiais/peças</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_k2:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Taxa Resolução</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">🎯</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #10b981;">{taxa_resolucao:.1f}%</div>
+                <div class="kpi-card-exec-sub">{concluidos} concluídos</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_k3:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Pendentes</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">⏳</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #f59e0b;">{pendentes}</div>
+                <div class="kpi-card-exec-sub">Aguardando peças</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    col_k4, col_k5, col_k6 = st.columns(3)
+    with col_k4:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Em Manutenção</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(14, 165, 233, 0.15); color: #0ea5e9;">🔧</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #0ea5e9;">{manutencao}</div>
+                <div class="kpi-card-exec-sub">Em reparo técnico</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_k5:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Estoque</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6;">📦</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #8b5cf6;">{total_estoque}</div>
+                <div class="kpi-card-exec-sub">Pedidos solicitados</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_k6:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Postos Atendidos</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">🏥</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #10b981;">{postos_atendidos}</div>
+                <div class="kpi-card-exec-sub">Unidades com O.S.</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
     # PAINEL DE AUDITORIA & FISCALIZAÇÃO DE PRAZOS
     if total_atrasados > 0:
@@ -717,8 +823,6 @@ def render_aba_dashboard() -> None:
                 "status": "Status Atual"
             })
             st.dataframe(df_atrasados, use_container_width=True, hide_index=True)
-    else:
-        st.success("✅ Conformidade Contratual de Prazos: Todas as ordens de serviço ativas estão dentro do prazo estipulado.")
 
     st.divider()
 
@@ -1067,7 +1171,6 @@ def render_aba_nova_requisicao() -> None:
                 sucesso, mensagem, registro = conexao_bd.inserir_requisicao(dados)
 
             if sucesso:
-                st.balloons()
                 id_protocolo = registro.get("id", "OK") if registro else "OK"
                 st.success(f"✅ Pedido gravado com sucesso! Protocolo: **#{id_protocolo}**")
 
@@ -2042,7 +2145,7 @@ def render_aba_admin() -> None:
                 with col_cria:
                     st.markdown("##### ➕ Criar Novo Acesso (Já Ativado)")
                     with st.form(key="form_admin_criar_usuario", clear_on_submit=True):
-                        novo_email = st.text_input("E-mail Corporativo (Lark / TI) *", placeholder="ex: ricardo.campos@tagsinfor.com.br")
+                        novo_email = st.text_input("E-mail de Acesso (Supabase Auth) *", placeholder="ex: usuario@empresa.com.br")
                         nova_senha_ini = st.text_input("Senha Inicial *", type="password", placeholder="Defina a senha inicial...")
                         btn_cria_user = st.form_submit_button("Criar Conta Ativa 🚀", use_container_width=True)
                         if btn_cria_user:

@@ -53,7 +53,7 @@ def limpar_cache_dados() -> None:
 
 
 # ==============================================================================
-# AUTENTICAÇÃO COM SUPABASE AUTH (LARK SUITE / CONTAS CORPORATIVAS)
+# AUTENTICAÇÃO COM SUPABASE AUTH
 # ==============================================================================
 
 def fazer_login(email: str, senha: str) -> Tuple[bool, str, Optional[Any], Optional[Any]]:
@@ -61,7 +61,7 @@ def fazer_login(email: str, senha: str) -> Tuple[bool, str, Optional[Any], Optio
     Realiza a autenticação direta contra o serviço Supabase Auth.
 
     Args:
-        email (str): E-mail corporativo do usuário.
+        email (str): E-mail do usuário cadastrado no Supabase.
         senha (str): Senha de acesso.
 
     Returns:

@@ -925,3 +925,321 @@
                 color: #f1f5f9;
                 margin-bottom: 14px;
             }
+
+            /* ==============================================================================
+               CARDS EXECUTIVOS MOBILE / WEB (PADRÃO APP MOBILE IDÊNTICO)
+               ============================================================================== */
+            .kpi-card-exec {
+                background: #111827;
+                border: 1px solid #1e293b;
+                border-radius: 14px;
+                padding: 16px 18px;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                min-height: 110px;
+                box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                margin-bottom: 12px;
+            }
+
+            .kpi-card-exec:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+            }
+
+            .kpi-card-exec-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-size: 0.76rem;
+                font-weight: 700;
+                color: #94a3b8;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+            }
+
+            .kpi-card-exec-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 32px;
+                height: 32px;
+                border-radius: 8px;
+                font-size: 1rem;
+            }
+
+            .kpi-card-exec-value {
+                font-size: 1.85rem;
+                font-weight: 800;
+                line-height: 1.1;
+                margin: 8px 0 4px 0;
+                letter-spacing: -0.02em;
+            }
+
+            .kpi-card-exec-sub {
+                font-size: 0.78rem;
+                color: #64748b;
+                font-weight: 500;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            /* ==============================================================================
+               HARMONIZAÇÃO COMPLETA DE TEMA CLARO (LIGHT MODE) NA WEB
+               ============================================================================== */
+            @media (prefers-color-scheme: light) {
+                body, html, .stApp {
+                    background-color: #f8fafc !important;
+                    color: #0f172a !important;
+                }
+
+                div[data-testid="stHeader"] {
+                    background-color: #f8fafc !important;
+                }
+
+                /* Inputs e Formulários Light */
+                div[data-testid="stForm"] {
+                    background: #ffffff !important;
+                    border: 1px solid #e2e8f0 !important;
+                    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06) !important;
+                }
+
+                div[data-testid="stWidgetLabel"] label,
+                div[data-testid="stWidgetLabel"] p,
+                div[data-testid="stMarkdownContainer"] label {
+                    color: #1e293b !important;
+                }
+
+                div[data-baseweb="input"],
+                div[data-baseweb="base-input"] {
+                    background-color: #ffffff !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+                }
+
+                div[data-baseweb="input"] input,
+                div[data-baseweb="base-input"] input {
+                    color: #0f172a !important;
+                }
+
+                div[data-baseweb="input"] input::placeholder,
+                div[data-baseweb="base-input"] input::placeholder {
+                    color: #94a3b8 !important;
+                }
+
+                div[data-baseweb="input"]:focus-within,
+                div[data-baseweb="base-input"]:focus-within {
+                    border-color: #0284c7 !important;
+                    background-color: #ffffff !important;
+                    box-shadow: 0 0 0 1px #0284c7, 0 0 10px rgba(2, 132, 199, 0.15) !important;
+                }
+
+                /* Selectbox e Dropdowns Light */
+                div[data-baseweb="select"] > div {
+                    background-color: #ffffff !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    color: #0f172a !important;
+                }
+
+                div[data-baseweb="select"] span,
+                div[data-baseweb="select"] div {
+                    color: #0f172a !important;
+                }
+
+                ul[data-baseweb="menu"],
+                div[data-baseweb="popover"] {
+                    background-color: #ffffff !important;
+                    border: 1.5px solid #e2e8f0 !important;
+                    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1) !important;
+                }
+
+                li[data-baseweb="menu-item"] {
+                    color: #334155 !important;
+                }
+
+                li[data-baseweb="menu-item"]:hover,
+                li[data-baseweb="menu-item"][aria-selected="true"] {
+                    background-color: #f0f9ff !important;
+                    color: #0284c7 !important;
+                }
+
+                div[data-baseweb="textarea"] {
+                    background-color: #ffffff !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                }
+
+                div[data-baseweb="textarea"] textarea {
+                    color: #0f172a !important;
+                }
+
+                /* Cards de KPI Light */
+                .kpi-card, .kpi-card-exec {
+                    background: #ffffff !important;
+                    border-color: #e2e8f0 !important;
+                    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05) !important;
+                }
+
+                .kpi-value, .kpi-card-exec-value {
+                    color: #0f172a !important;
+                }
+
+                .kpi-header, .kpi-card-exec-header {
+                    color: #64748b !important;
+                }
+
+                .kpi-card-exec-sub {
+                    color: #64748b !important;
+                }
+
+                .kpi-card-purple {
+                    border-color: #8b5cf6 !important;
+                    background: linear-gradient(180deg, #ffffff 0%, #faf5ff 100%) !important;
+                }
+
+                .kpi-card-amber {
+                    border-color: #f59e0b !important;
+                    background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%) !important;
+                }
+
+                .kpi-card-blue {
+                    border-color: #0284c7 !important;
+                    background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%) !important;
+                }
+
+                .kpi-card-green {
+                    border-color: #10b981 !important;
+                    background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%) !important;
+                }
+
+                /* Status Pills Light */
+                .status-pill-card {
+                    background: #ffffff !important;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+                }
+
+                .status-pill-amber {
+                    border-color: #fde68a !important;
+                    color: #b45309 !important;
+                }
+                .status-pill-amber .status-badge-count {
+                    background: #fef3c7 !important;
+                    color: #d97706 !important;
+                }
+
+                .status-pill-brown {
+                    border-color: #fed7aa !important;
+                    color: #c2410c !important;
+                }
+                .status-pill-brown .status-badge-count {
+                    background: #ffedd5 !important;
+                    color: #ea580c !important;
+                }
+
+                .status-pill-blue {
+                    border-color: #bae6fd !important;
+                    color: #0369a1 !important;
+                }
+                .status-pill-blue .status-badge-count {
+                    background: #e0f2fe !important;
+                    color: #0284c7 !important;
+                }
+
+                .status-pill-gray {
+                    border-color: #e2e8f0 !important;
+                    color: #475569 !important;
+                }
+                .status-pill-gray .status-badge-count {
+                    background: #f1f5f9 !important;
+                    color: #475569 !important;
+                }
+
+                .status-pill-green {
+                    border-color: #a7f3d0 !important;
+                    color: #047857 !important;
+                }
+                .status-pill-green .status-badge-count {
+                    background: #d1fae5 !important;
+                    color: #059669 !important;
+                }
+
+                /* Sidebar Light */
+                section[data-testid="stSidebar"] {
+                    background-color: #ffffff !important;
+                    border-right: 1px solid #e2e8f0 !important;
+                }
+
+                .user-sidebar-card {
+                    background: #ffffff !important;
+                    border: 1px solid #e2e8f0 !important;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+                }
+
+                .user-sidebar-name {
+                    color: #0f172a !important;
+                }
+
+                .user-sidebar-email {
+                    color: #64748b !important;
+                }
+
+                .sidebar-nav-title {
+                    color: #1e293b !important;
+                }
+
+                section[data-testid="stSidebar"] div.stButton > button {
+                    background: #f8fafc !important;
+                    border: 1px solid #e2e8f0 !important;
+                    color: #334155 !important;
+                }
+
+                section[data-testid="stSidebar"] div.stButton > button:hover {
+                    background: #f1f5f9 !important;
+                    border-color: #0284c7 !important;
+                    color: #0284c7 !important;
+                }
+
+                section[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
+                    background: #0284c7 !important;
+                    border: 1px solid #0284c7 !important;
+                    color: #ffffff !important;
+                }
+
+                /* Box Update Light */
+                .box-update-neon,
+                div[data-testid="stVerticalBlockBorderWrapper"]:has(#marker-update-neon) {
+                    background: #ffffff !important;
+                    border: 1.5px solid #0d9488 !important;
+                    box-shadow: 0 4px 18px rgba(13, 148, 136, 0.08) !important;
+                }
+
+                .box-update-title {
+                    color: #0f766e !important;
+                }
+
+                /* Segmented Control Light */
+                div[data-testid="stSegmentedControl"] {
+                    background: #f1f5f9 !important;
+                    border: 1px solid #e2e8f0 !important;
+                }
+
+                div[data-testid="stSegmentedControl"] button {
+                    color: #64748b !important;
+                }
+
+                div[data-testid="stSegmentedControl"] button[aria-checked="true"] {
+                    background: #ffffff !important;
+                    color: #0f172a !important;
+                    border: 1px solid #0284c7 !important;
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+                }
+            }
+
+            /* Também suporta quando a classe data-theme="light" é forçada pelo Streamlit */
+            [data-theme="light"] .kpi-card,
+            [data-theme="light"] .kpi-card-exec,
+            [data-theme="light"] div[data-testid="stForm"] {
+                background: #ffffff !important;
+                color: #0f172a !important;
+            }
