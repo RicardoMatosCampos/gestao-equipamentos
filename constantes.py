@@ -170,8 +170,26 @@ ABAS_SISTEMA: List[str] = [
     "📊 Dashboard Analítico",
     "📝 Nova Requisição",
     "📋 Consultar e Histórico",
+    "📦 Estoque & Centros de Custo",
     "⚙️ Gerenciar Cadastros (Admin)"
 ]
+
+# Domínio do Módulo de Controle de Estoque e Almoxarifado
+UNIDADES_MEDIDA_ESTOQUE: List[str] = [
+    "UN",
+    "Metro",
+    "Pacote",
+    "Caixa",
+    "Kit",
+    "Par"
+]
+
+TIPOS_MOVIMENTACAO_ESTOQUE: List[str] = [
+    "SAIDA_CONSUMO",
+    "ENTRADA",
+    "AJUSTE_CONTAGEM"
+]
+
 
 # Mapeamento Completo de Colunas para Exibição e Exportação de Relatórios CSV/Excel
 MAPA_COLUNAS_RELATORIO: Dict[str, str] = {

@@ -30,6 +30,7 @@ from components.voucher_os import (
     gerar_termo_html,
     render_acoes_impressao_voucher,
 )
+from components.estoque_view import render_aba_estoque
 
 from constantes import (
     APP_TITLE,
@@ -824,9 +825,185 @@ def render_aba_dashboard() -> None:
             })
             st.dataframe(df_atrasados, use_container_width=True, hide_index=True)
 
+    # INSIGHTS RÁPIDOS DE GESTÃO (HIGHLIGHTS)
+    top_eq_nome = df_dash["equipamento_nome"].value_counts().index[0] if "equipamento_nome" in df_dash.columns and not df_dash["equipamento_nome"].empty else "Nenhum"
+    top_eq_qtd = int(df_dash["equipamento_nome"].value_counts().iloc[0]) if "equipamento_nome" in df_dash.columns and not df_dash["equipamento_nome"].empty else 0
+
+    top_un_nome = df_dash["unidade_nome"].value_counts().index[0] if "unidade_nome" in df_dash.columns and not df_dash["unidade_nome"].empty else "Nenhuma"
+    top_un_qtd = int(df_dash["unidade_nome"].value_counts().iloc[0]) if "unidade_nome" in df_dash.columns and not df_dash["unidade_nome"].empty else 0
+
+    col_ins1, col_ins2, col_ins3 = st.columns(3)
+    with col_ins1:
+        st.markdown(
+            f"""
+            <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.3rem;">🏆</span>
+                <div>
+                    <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Mais Solicitado</div>
+                    <div style="font-size: 0.9rem; font-weight: 700; color: #f8fafc;">{top_eq_nome}</div>
+                    <div style="font-size: 0.75rem; color: #38bdf8;">{top_eq_qtd} requisição(ões)</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_ins2:
+        st.markdown(
+            f"""
+            <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.3rem;">🏥</span>
+                <div>
+                    <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Maior Demanda</div>
+                    <div style="font-size: 0.9rem; font-weight: 700; color: #f8fafc;">{top_un_nome}</div>
+                    <div style="font-size: 0.75rem; color: #10b981;">{top_un_qtd} chamado(s)</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_ins3:
+        st.markdown(
+            f"""
+            <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.3rem;">🛡️</span>
+                <div>
+                    <div style="font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; font-weight: 700;">Manutenção Preventiva</div>
+                    <div style="font-size: 0.9rem; font-weight: 700; color: #f8fafc;">{taxa_preventiva:.1f}% das visitas</div>
+                    <div style="font-size: 0.75rem; color: #a855f7;">{qtd_preventivas} visitas realizadas</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # ==========================================================================
+    # SEÇÃO EXECUTIVA DE SUPRIMENTOS, ALMOXARIFADO E COMPRAS
+    # ==========================================================================
+    st.divider()
+    st.markdown("#### 🛒 Suprimentos, Almoxarifado & Necessidade de Compras")
+    st.caption("Cálculo em tempo real da quantidade de peças necessárias para reposição do estoque de segurança das equipes.")
+
+    kpis_est = conexao_bd.obter_kpis_estoque()
+    dados_compras_dash = conexao_bd.calcular_necessidade_compras(fator_reposicao=1.0)
+    lista_compras_dash = dados_compras_dash.get("lista_compras", [])
+
+    col_cp1, col_cp2, col_cp3, col_cp4 = st.columns(4)
+    with col_cp1:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Abaixo do Mínimo</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(239, 68, 68, 0.15); color: #ef4444;">🚨</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #ef4444;">{kpis_est.get("itens_criticos_qtd", 0)} materiais</div>
+                <div class="kpi-card-exec-sub">Em déficit no almoxarifado</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_cp2:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Qtd a Comprar</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">🛒</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #f59e0b;">{dados_compras_dash.get("total_unidades_comprar", 0)} peças</div>
+                <div class="kpi-card-exec-sub">Volume total de reposição</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_cp3:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Orçamento Necessário</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">💵</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #10b981;">R$ {dados_compras_dash.get("custo_total_estimado", 0.0):,.2f}</div>
+                <div class="kpi-card-exec-sub">Estimativa financeira</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_cp4:
+        st.markdown(
+            f"""
+            <div class="kpi-card-exec">
+                <div class="kpi-card-exec-header">
+                    <span>Patrimônio Estocado</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(14, 165, 233, 0.15); color: #0ea5e9;">🏦</span>
+                </div>
+                <div class="kpi-card-exec-value" style="color: #0ea5e9;">R$ {kpis_est.get("valor_total_patrimonio", 0.0):,.2f}</div>
+                <div class="kpi-card-exec-sub">{kpis_est.get("total_unidades_fisicas", 0)} unidades físicas</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    if lista_compras_dash:
+        col_gc1, col_gc2 = st.columns(2)
+        df_cp_dash = pd.DataFrame(lista_compras_dash)
+
+        with col_gc1:
+            st.markdown("##### 📦 Top Peças com Maior Volume de Compra")
+            top_qtd_d = df_cp_dash.nlargest(6, "quantidade_a_comprar")
+            chart_cq = alt.Chart(top_qtd_d).mark_bar(cornerRadiusTopRight=5, cornerRadiusBottomRight=5, color="#f59e0b").encode(
+                x=alt.X("quantidade_a_comprar:Q", title="Qtd a Comprar (Peças)"),
+                y=alt.Y("nome:N", sort="-x", title="Material"),
+                tooltip=[
+                    alt.Tooltip("nome:N", title="Material"),
+                    alt.Tooltip("quantidade_a_comprar:Q", title="Qtd a Comprar"),
+                    alt.Tooltip("quantidade_atual:Q", title="Saldo Atual"),
+                    alt.Tooltip("estoque_minimo:Q", title="Estoque Mínimo")
+                ]
+            ).properties(height=260)
+            st.altair_chart(chart_cq, use_container_width=True)
+
+        with col_gc2:
+            st.markdown("##### 💵 Orçamento de Reposição por Categoria")
+            df_cat_d = df_cp_dash.groupby("categoria")["custo_total_compra"].sum().reset_index()
+            chart_cc = alt.Chart(df_cat_d).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5, color="#0ea5e9").encode(
+                x=alt.X("categoria:N", title="Categoria", axis=alt.Axis(labelAngle=-15)),
+                y=alt.Y("custo_total_compra:Q", title="Custo Estimado (R$)"),
+                tooltip=[
+                    alt.Tooltip("categoria:N", title="Categoria"),
+                    alt.Tooltip("custo_total_compra:Q", format=",.2f", title="Total (R$)")
+                ]
+            ).properties(height=260)
+            st.altair_chart(chart_cc, use_container_width=True)
+
+        with st.expander(f"📋 Ver Lista Resumida dos {min(8, len(lista_compras_dash))} Materiais mais Urgentes para Comprar", expanded=False):
+            df_top_cp = df_cp_dash.head(8)[[
+                "nivel_urgencia", "nome", "categoria", "quantidade_atual", "estoque_minimo", "quantidade_a_comprar", "valor_unitario", "custo_total_compra"
+            ]].copy()
+            df_top_cp["Preço Un."] = df_top_cp["valor_unitario"].apply(lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            df_top_cp["Custo Total"] = df_top_cp["custo_total_compra"].apply(lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            st.dataframe(df_top_cp.rename(columns={
+                "nivel_urgencia": "Prioridade",
+                "nome": "Material",
+                "categoria": "Categoria",
+                "quantidade_atual": "Saldo",
+                "estoque_minimo": "Mínimo",
+                "quantidade_a_comprar": "Comprar"
+            })[["Prioridade", "Material", "Categoria", "Saldo", "Mínimo", "Comprar", "Preço Un.", "Custo Total"]], use_container_width=True, hide_index=True)
+
+        col_b_est1, _ = st.columns([2, 3])
+        with col_b_est1:
+            if st.button("🚀 Acessar Módulo Completo de Estoque & Compras ➡️", key="btn_nav_estoque_desde_dash", type="primary", use_container_width=True):
+                st.session_state["aba_selecionada"] = ABAS_SISTEMA[3]
+                st.session_state["nav_segmented_abas"] = ABAS_SISTEMA[3]
+                st.rerun()
+    else:
+        st.success("🟢 Nível de estoque em conformidade! Nenhuma compra urgente necessária no almoxarifado.")
+
     st.divider()
 
-    # SEÇÃO DE GRÁFICOS
+    # SEÇÃO DE GRÁFICOS DE ATENDIMENTO
     # LINHA 1: Status (Donut) & Tipo de Visita (Barra)
     st.markdown("#### 🔄 Ciclo de Vida e Natureza dos Atendimentos")
     col_g1, col_g2 = st.columns(2)
@@ -2077,33 +2254,82 @@ def render_aba_admin() -> None:
     with sub_equipamentos:
         c_e1, c_e2 = st.columns([5, 1])
         with c_e1:
-            st.markdown("#### 📦 Gestão de Equipamentos / Materiais")
+            st.markdown("#### 📦 Gestão e Alinhamento de Equipamentos / Materiais")
         with c_e2:
             if st.button("🔄 Atualizar", key="btn_att_sub_equipamentos", use_container_width=True):
                 conexao_bd.limpar_cache_dados()
                 st.rerun()
 
-        with st.form(key="form_novo_eq", clear_on_submit=True):
-            col_e1, col_e2 = st.columns([3, 1])
-            with col_e1:
-                nome_eq = st.text_input("Nome do Equipamento")
-            with col_e2:
-                st.write("")
-                st.write("")
-                btn_add_eq = st.form_submit_button("➕ Adicionar", use_container_width=True)
-
-        if btn_add_eq:
-            if nome_eq and nome_eq.strip():
-                sucesso, msg, _ = conexao_bd.inserir_item_tabela("equipamentos", {"nome": nome_eq.strip()})
-                if sucesso:
-                    st.success("✅ Item cadastrado!")
-                    st.rerun()
-                else:
-                    st.error(f"❌ {msg}")
+        st.write("Cadastre novos equipamentos ou edite e alinhe os nomes dos equipamentos existentes para padronizar as ordens de serviço.")
 
         itens_eq, _ = conexao_bd.buscar_itens_tabela("equipamentos")
+
+        col_novo, col_edit = st.columns(2)
+
+        # 1. Formulário para Cadastrar Novo Equipamento
+        with col_novo:
+            st.markdown("##### ➕ Cadastrar Novo Equipamento")
+            with st.form(key="form_novo_eq", clear_on_submit=True):
+                nome_eq = st.text_input("Nome do Equipamento *", placeholder="ex: Computador Desktop Core i5")
+                btn_add_eq = st.form_submit_button("➕ Cadastrar Equipamento", use_container_width=True)
+
+            if btn_add_eq:
+                if nome_eq and nome_eq.strip():
+                    sucesso, msg, _ = conexao_bd.inserir_item_tabela("equipamentos", {"nome": nome_eq.strip()})
+                    if sucesso:
+                        st.success("✅ Equipamento cadastrado com sucesso!")
+                        time.sleep(0.8)
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
+                else:
+                    st.warning("⚠️ O nome do equipamento não pode ser vazio.")
+
+        # 2. Formulário para Editar / Renomear Equipamento Existente
+        with col_edit:
+            st.markdown("##### ✏️ Editar / Alinhar Nome de Equipamento")
+            if itens_eq:
+                opcoes_eq_edit = {f"{eq.get('nome')} (ID: {eq.get('id')})": eq for eq in itens_eq}
+                sel_eq_label = st.selectbox("Selecione o Equipamento para Editar:", list(opcoes_eq_edit.keys()), key="sel_eq_edit_admin")
+                eq_alvo = opcoes_eq_edit[sel_eq_label]
+
+                with st.form(key=f"form_edit_eq_{eq_alvo['id']}"):
+                    novo_nome_eq = st.text_input("Novo Nome do Equipamento *", value=eq_alvo.get("nome", ""))
+                    col_b_save, col_b_del = st.columns([2, 1])
+                    with col_b_save:
+                        btn_salvar_eq = st.form_submit_button("Salvar Alteração 💾", use_container_width=True)
+                    with col_b_del:
+                        btn_del_eq = st.form_submit_button("🗑️ Excluir", use_container_width=True)
+
+                if btn_salvar_eq:
+                    if not novo_nome_eq or not novo_nome_eq.strip():
+                        st.warning("⚠️ O nome não pode ficar vazio.")
+                    else:
+                        sucesso_ed, msg_ed = conexao_bd.atualizar_item_tabela("equipamentos", eq_alvo["id"], {"nome": novo_nome_eq.strip()})
+                        if sucesso_ed:
+                            st.success(f"✅ Equipamento renomeado para '{novo_nome_eq.strip()}' com sucesso!")
+                            time.sleep(0.8)
+                            st.rerun()
+                        else:
+                            st.error(msg_ed)
+
+                if btn_del_eq:
+                    sucesso_dl, msg_dl = conexao_bd.excluir_item_tabela("equipamentos", eq_alvo["id"])
+                    if sucesso_dl:
+                        st.success("Equipamento excluído com sucesso!")
+                        time.sleep(0.8)
+                        st.rerun()
+                    else:
+                        st.error(msg_dl)
+            else:
+                st.info("Nenhum equipamento cadastrado ainda.")
+
+        st.divider()
+        st.markdown(f"##### 📋 Equipamentos Cadastrados no Sistema ({len(itens_eq) if itens_eq else 0})")
         if itens_eq:
-            st.dataframe(pd.DataFrame(itens_eq), use_container_width=True, hide_index=True)
+            df_eq = pd.DataFrame(itens_eq)
+            colunas_eq = [c for c in ["id", "nome", "categoria", "ativo"] if c in df_eq.columns]
+            st.dataframe(df_eq[colunas_eq].rename(columns={"id": "ID", "nome": "Nome do Equipamento", "categoria": "Categoria", "ativo": "Ativo"}), use_container_width=True, hide_index=True)
 
     # 5. Gestão de Contas e Senhas de Usuários (Supabase Auth via Service Role)
     with sub_usuarios_auth:
@@ -2254,7 +2480,12 @@ def main() -> None:
         render_aba_nova_requisicao()
     elif aba_atual == ABAS_SISTEMA[2]:
         render_aba_consulta()
-    elif aba_atual == ABAS_SISTEMA[3] and is_admin:
+    elif aba_atual == ABAS_SISTEMA[3]:
+        usr_info = st.session_state.get("usuario_logado")
+        if not isinstance(usr_info, dict):
+            usr_info = {"email": st.session_state.get("usuario_email")}
+        render_aba_estoque(usuario_logado=usr_info, is_admin=is_admin)
+    elif aba_atual == ABAS_SISTEMA[4] and is_admin:
         render_aba_admin()
 
 
