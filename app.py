@@ -30,6 +30,7 @@ from components.voucher_os import (
     gerar_termo_html,
     render_acoes_impressao_voucher,
 )
+import components.estoque_view as estoque_view
 from components.estoque_view import render_aba_estoque
 
 from constantes import (
@@ -921,11 +922,11 @@ def render_aba_dashboard() -> None:
             f"""
             <div class="kpi-card-exec">
                 <div class="kpi-card-exec-header">
-                    <span>Orçamento Necessário</span>
-                    <span class="kpi-card-exec-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">💵</span>
+                    <span>Materiais no Catálogo</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">📦</span>
                 </div>
-                <div class="kpi-card-exec-value" style="color: #10b981;">R$ {dados_compras_dash.get("custo_total_estimado", 0.0):,.2f}</div>
-                <div class="kpi-card-exec-sub">Estimativa financeira</div>
+                <div class="kpi-card-exec-value" style="color: #10b981;">{kpis_est.get("total_itens", 0)} itens</div>
+                <div class="kpi-card-exec-sub">Cadastrados no sistema</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -935,11 +936,11 @@ def render_aba_dashboard() -> None:
             f"""
             <div class="kpi-card-exec">
                 <div class="kpi-card-exec-header">
-                    <span>Patrimônio Estocado</span>
-                    <span class="kpi-card-exec-icon" style="background: rgba(14, 165, 233, 0.15); color: #0ea5e9;">🏦</span>
+                    <span>Total em Prateleira</span>
+                    <span class="kpi-card-exec-icon" style="background: rgba(14, 165, 233, 0.15); color: #0ea5e9;">📦</span>
                 </div>
-                <div class="kpi-card-exec-value" style="color: #0ea5e9;">R$ {kpis_est.get("valor_total_patrimonio", 0.0):,.2f}</div>
-                <div class="kpi-card-exec-sub">{kpis_est.get("total_unidades_fisicas", 0)} unidades físicas</div>
+                <div class="kpi-card-exec-value" style="color: #0ea5e9;">{kpis_est.get("total_unidades_fisicas", 0)} peças</div>
+                <div class="kpi-card-exec-sub">Saldo físico disponível</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -965,32 +966,31 @@ def render_aba_dashboard() -> None:
             st.altair_chart(chart_cq, use_container_width=True)
 
         with col_gc2:
-            st.markdown("##### 💵 Orçamento de Reposição por Categoria")
-            df_cat_d = df_cp_dash.groupby("categoria")["custo_total_compra"].sum().reset_index()
+            st.markdown("##### 📊 Volume de Reposição por Categoria")
+            df_cat_d = df_cp_dash.groupby("categoria")["quantidade_a_comprar"].sum().reset_index()
             chart_cc = alt.Chart(df_cat_d).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5, color="#0ea5e9").encode(
                 x=alt.X("categoria:N", title="Categoria", axis=alt.Axis(labelAngle=-15)),
-                y=alt.Y("custo_total_compra:Q", title="Custo Estimado (R$)"),
+                y=alt.Y("quantidade_a_comprar:Q", title="Qtd de Peças a Comprar"),
                 tooltip=[
                     alt.Tooltip("categoria:N", title="Categoria"),
-                    alt.Tooltip("custo_total_compra:Q", format=",.2f", title="Total (R$)")
+                    alt.Tooltip("quantidade_a_comprar:Q", title="Qtd de Peças")
                 ]
             ).properties(height=260)
             st.altair_chart(chart_cc, use_container_width=True)
 
         with st.expander(f"📋 Ver Lista Resumida dos {min(8, len(lista_compras_dash))} Materiais mais Urgentes para Comprar", expanded=False):
             df_top_cp = df_cp_dash.head(8)[[
-                "nivel_urgencia", "nome", "categoria", "quantidade_atual", "estoque_minimo", "quantidade_a_comprar", "valor_unitario", "custo_total_compra"
+                "nivel_urgencia", "nome", "categoria", "quantidade_atual", "estoque_minimo", "quantidade_a_comprar", "unidade_medida"
             ]].copy()
-            df_top_cp["Preço Un."] = df_top_cp["valor_unitario"].apply(lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            df_top_cp["Custo Total"] = df_top_cp["custo_total_compra"].apply(lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             st.dataframe(df_top_cp.rename(columns={
                 "nivel_urgencia": "Prioridade",
                 "nome": "Material",
                 "categoria": "Categoria",
                 "quantidade_atual": "Saldo",
                 "estoque_minimo": "Mínimo",
-                "quantidade_a_comprar": "Comprar"
-            })[["Prioridade", "Material", "Categoria", "Saldo", "Mínimo", "Comprar", "Preço Un.", "Custo Total"]], use_container_width=True, hide_index=True)
+                "quantidade_a_comprar": "Comprar",
+                "unidade_medida": "UN"
+            })[["Prioridade", "Material", "Categoria", "Saldo", "Mínimo", "Comprar", "UN"]], use_container_width=True, hide_index=True)
 
         col_b_est1, _ = st.columns([2, 3])
         with col_b_est1:
@@ -2484,7 +2484,8 @@ def main() -> None:
         usr_info = st.session_state.get("usuario_logado")
         if not isinstance(usr_info, dict):
             usr_info = {"email": st.session_state.get("usuario_email")}
-        render_aba_estoque(usuario_logado=usr_info, is_admin=is_admin)
+        importlib.reload(estoque_view)
+        estoque_view.render_aba_estoque(usuario_logado=usr_info, is_admin=is_admin)
     elif aba_atual == ABAS_SISTEMA[4] and is_admin:
         render_aba_admin()
 

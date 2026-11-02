@@ -32,11 +32,24 @@ TABLE_ESTOQUE_MOVIMENTACOES = "estoque_movimentacoes"
 @st.cache_resource(show_spinner=False)
 def iniciar_conexao() -> Client:
     """
-    Inicializa o cliente Supabase utilizando credenciais seguras do secrets.toml.
-    O decorador @st.cache_resource garante conexão singleton para máxima performance.
+    Inicializa o cliente Supabase para operações de banco de dados utilizando credenciais seguras
+    do secrets.toml. Prioriza SUPABASE_SERVICE_ROLE_KEY no backend para compatibilidade total
+    com RLS ativo mesmo após restauração de sessão via token (F5), usando SUPABASE_KEY como fallback.
 
     Returns:
         Client: Instância ativa do cliente Supabase.
+    """
+    url: str = st.secrets["SUPABASE_URL"].strip()
+    service_key: str = st.secrets.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    key: str = service_key if service_key else st.secrets["SUPABASE_KEY"].strip()
+    return create_client(url, key)
+
+
+def iniciar_conexao_auth() -> Client:
+    """
+    Cria uma instância isolada do cliente Supabase com a chave pública (SUPABASE_KEY)
+    exclusivamente para operações de autenticação (login, logout, recuperação de senha),
+    evitando compartilhar estado de sessão entre diferentes usuários no servidor.
     """
     url: str = st.secrets["SUPABASE_URL"].strip()
     key: str = st.secrets["SUPABASE_KEY"].strip()
@@ -74,7 +87,7 @@ def fazer_login(email: str, senha: str) -> Tuple[bool, str, Optional[Any], Optio
             - Sessão JWT ativa (Session ou None)
     """
     try:
-        supabase = iniciar_conexao()
+        supabase = iniciar_conexao_auth()
         resposta = supabase.auth.sign_in_with_password({
             "email": email.strip().lower(),
             "password": senha
@@ -97,7 +110,7 @@ def fazer_logout() -> Tuple[bool, str]:
         Tuple[bool, str]: Status de sucesso e mensagem.
     """
     try:
-        supabase = iniciar_conexao()
+        supabase = iniciar_conexao_auth()
         supabase.auth.sign_out()
         return True, "Sessão encerrada com sucesso!"
     except Exception as exc:
@@ -117,7 +130,7 @@ def redefinir_senha_com_token(access_token: str, refresh_token: str, nova_senha:
         Tuple[bool, str]: Sucesso e mensagem descritiva.
     """
     try:
-        supabase = iniciar_conexao()
+        supabase = iniciar_conexao_auth()
         supabase.auth.set_session(access_token.strip(), (refresh_token or "").strip())
         supabase.auth.update_user({"password": nova_senha})
         return True, "Senha cadastrada com sucesso! Você já pode fazer login normalmente."
@@ -136,7 +149,7 @@ def solicitar_recuperacao_senha(email: str) -> Tuple[bool, str]:
         Tuple[bool, str]: Sucesso e mensagem informativa.
     """
     try:
-        supabase = iniciar_conexao()
+        supabase = iniciar_conexao_auth()
         supabase.auth.reset_password_for_email(email.strip().lower())
         return True, f"Link de redefinição enviado com sucesso para {email}! Verifique sua caixa de entrada."
     except Exception as exc:
@@ -1731,7 +1744,7 @@ def calcular_necessidade_compras(fator_reposicao: float = 1.0) -> Dict[str, Any]
 
     lista_compras.sort(key=lambda x: (
         0 if "RUPTURA" in x["nivel_urgencia"] else (1 if "CRÍTICO" in x["nivel_urgencia"] else 2),
-        -x["custo_total_compra"]
+        -x["quantidade_a_comprar"]
     ))
 
     return {

@@ -76,7 +76,7 @@ def render_aba_estoque(usuario_logado: Optional[Dict[str, Any]] = None, is_admin
 
     # 3. Sub-Navegação por Segmented Control (Responsivo)
     opcoes_sub_abas = [
-        "📊 Dashboard & Custos",
+        "📊 Dashboard & Reposição",
         "📉 Dar Baixa (Centro de Custo)",
         "📈 Entrada de Peças",
         "📋 Contagem Física (Admin)",
@@ -86,7 +86,7 @@ def render_aba_estoque(usuario_logado: Optional[Dict[str, Any]] = None, is_admin
     sub_selecionada = st.segmented_control(
         "Módulos de Estoque",
         options=opcoes_sub_abas,
-        default="📊 Dashboard & Custos",
+        default="📊 Dashboard & Reposição",
         selection_mode="single",
         label_visibility="collapsed",
         key="nav_segmented_estoque"
@@ -116,12 +116,12 @@ def _render_sub_dashboard_estoque() -> None:
     itens, _, _ = conexao_bd.buscar_itens_estoque()
 
     st.markdown("### 📊 Painel Executivo de Estoque, Compras e Centros de Custo")
-    st.write("Monitore o nível de estoque em prateleira, simule e calcule a necessidade de reposição e acompanhe os custos por Unidade de Saúde destinatária.")
+    st.write("Monitore o nível de estoque em prateleira, simule e calcule a necessidade de reposição e acompanhe o consumo por Unidade de Saúde destinatária.")
 
     # ==========================================================================
-    # 1. LINHA DE KPIS EXECUTIVOS (6 MÉTRICAS PRINCIPAIS)
+    # 1. LINHA DE KPIS EXECUTIVOS (4 MÉTRICAS PRINCIPAIS SEM VALORES MONETÁRIOS)
     # ==========================================================================
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         st.metric(
             label="📦 Materiais no Catálogo",
@@ -144,19 +144,6 @@ def _render_sub_dashboard_estoque() -> None:
             delta_color="inverse" if kpis.get('necessidade_compras_pecas', 0) > 0 else "normal"
         )
     with c4:
-        st.metric(
-            label="💵 Orçamento de Compra",
-            value=f"R$ {kpis.get('necessidade_compras_orcamento', 0.0):,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
-            delta="Estimativa para Reposição",
-            delta_color="inverse" if kpis.get('necessidade_compras_orcamento', 0.0) > 0 else "normal"
-        )
-    with c5:
-        st.metric(
-            label="🏦 Patrimônio Estocado",
-            value=f"R$ {kpis['valor_total_patrimonio']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
-            delta="Valor em Almoxarifado"
-        )
-    with c6:
         st.metric(
             label="📉 Saídas Registradas",
             value=f"{kpis['saidas_mes']} peças",
@@ -215,7 +202,6 @@ def _render_sub_dashboard_estoque() -> None:
         lista_compras_filtrada = [it for it in lista_compras_filtrada if "CRÍTICO" in it["nivel_urgencia"] or "RUPTURA" in it["nivel_urgencia"]]
 
     total_pecas_calc = sum(int(it["quantidade_a_comprar"]) for it in lista_compras_filtrada)
-    custo_total_calc = sum(float(it["custo_total_compra"]) for it in lista_compras_filtrada)
 
     # Card Resumo do Pedido de Compras Calculado
     st.markdown(f"""
@@ -231,10 +217,6 @@ def _render_sub_dashboard_estoque() -> None:
                 <div>
                     <span style="font-size: 0.78rem; color: #94a3b8;">Volume Total a Comprar:</span>
                     <div style="font-size: 1.25rem; font-weight: 800; color: #f59e0b;">{total_pecas_calc} peças</div>
-                </div>
-                <div>
-                    <span style="font-size: 0.78rem; color: #94a3b8;">Investimento Estimado:</span>
-                    <div style="font-size: 1.25rem; font-weight: 800; color: #10b981;">R$ {custo_total_calc:,.2f}</div>
                 </div>
             </div>
         </div>
@@ -256,21 +238,20 @@ def _render_sub_dashboard_estoque() -> None:
                 tooltip=[
                     alt.Tooltip("nome:N", title="Material"),
                     alt.Tooltip("quantidade_a_comprar:Q", title="Comprar"),
-                    alt.Tooltip("unidade_medida:N", title="Unidade"),
-                    alt.Tooltip("custo_total_compra:Q", title="Custo Estimado", format=",.2f")
+                    alt.Tooltip("unidade_medida:N", title="Unidade")
                 ]
             ).properties(height=280)
             st.altair_chart(chart_compra_qtd, use_container_width=True)
 
         with col_g_compra2:
-            st.markdown("##### 💵 Orçamento de Compra por Categoria de Material")
-            df_cat_compra = df_compras.groupby("categoria")["custo_total_compra"].sum().reset_index()
+            st.markdown("##### 📊 Volume de Peças a Comprar por Categoria")
+            df_cat_compra = df_compras.groupby("categoria")["quantidade_a_comprar"].sum().reset_index()
             chart_compra_cat = alt.Chart(df_cat_compra).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6, color="#0ea5e9").encode(
                 x=alt.X("categoria:N", title="Categoria", axis=alt.Axis(labelAngle=-15)),
-                y=alt.Y("custo_total_compra:Q", title="Investimento Estimado (R$)"),
+                y=alt.Y("quantidade_a_comprar:Q", title="Qtd de Peças a Comprar"),
                 tooltip=[
                     alt.Tooltip("categoria:N", title="Categoria"),
-                    alt.Tooltip("custo_total_compra:Q", title="Total em R$", format=",.2f")
+                    alt.Tooltip("quantidade_a_comprar:Q", title="Qtd de Peças")
                 ]
             ).properties(height=280)
             st.altair_chart(chart_compra_cat, use_container_width=True)
@@ -285,13 +266,8 @@ def _render_sub_dashboard_estoque() -> None:
             "estoque_minimo",
             "quantidade_a_comprar",
             "unidade_medida",
-            "valor_unitario",
-            "custo_total_compra",
             "localizacao_almoxarifado"
         ]].copy()
-
-        df_tabela_compras["Preço Unit."] = df_tabela_compras["valor_unitario"].apply(lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        df_tabela_compras["Custo Total"] = df_tabela_compras["custo_total_compra"].apply(lambda v: f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         df_tabela_compras = df_tabela_compras.rename(columns={
             "nivel_urgencia": "Prioridade",
@@ -318,8 +294,6 @@ def _render_sub_dashboard_estoque() -> None:
                 "% Atendido",
                 "QTD A COMPRAR",
                 "UN",
-                "Preço Unit.",
-                "Custo Total",
                 "Localização"
             ]],
             use_container_width=True,
@@ -329,7 +303,8 @@ def _render_sub_dashboard_estoque() -> None:
         # Ações de Exportação
         col_exp1, col_exp2 = st.columns([1, 2])
         with col_exp1:
-            csv_compras = df_compras.to_csv(index=False).encode("utf-8")
+            colunas_csv = [c for c in df_compras.columns if c not in ("valor_unitario", "custo_total_compra")]
+            csv_compras = df_compras[colunas_csv].to_csv(index=False).encode("utf-8")
             st.download_button(
                 label="📥 Baixar Pedido em CSV / Excel",
                 data=csv_compras,
@@ -343,10 +318,9 @@ def _render_sub_dashboard_estoque() -> None:
                 texto_formatado += f"Data: {time.strftime('%d/%m/%Y %H:%M')}\n"
                 texto_formatado += f"Estratégia: {estrategia_compra}\n"
                 texto_formatado += f"Total de Itens: {len(lista_compras_filtrada)} | Peças: {total_pecas_calc}\n"
-                texto_formatado += f"Orçamento Estimado: R$ {custo_total_calc:,.2f}\n"
                 texto_formatado += "----------------------------------------\n"
                 for it in lista_compras_filtrada:
-                    texto_formatado += f"• *{it['nome']}* - Comprar: *{it['quantidade_a_comprar']} {it['unidade_medida']}* (Atual: {it['quantidade_atual']} | Mín: {it['estoque_minimo']}) ~ R$ {it['custo_total_compra']:,.2f}\n"
+                    texto_formatado += f"• *{it['nome']}* - Comprar: *{it['quantidade_a_comprar']} {it['unidade_medida']}* (Atual: {it['quantidade_atual']} | Mín: {it['estoque_minimo']})\n"
                 st.code(texto_formatado, language="markdown")
     else:
         st.success("🎉 Parabéns! Todos os materiais estão com saldo abastecido acima do nível de segurança estipulado. Nenhuma compra necessária no momento.")
@@ -410,8 +384,7 @@ def _render_sub_dashboard_estoque() -> None:
                 y=alt.Y("unidade_nome:N", sort="-x", title="Centro de Custo"),
                 tooltip=[
                     alt.Tooltip("unidade_nome:N", title="Unidade"),
-                    alt.Tooltip("total_itens_retirados:Q", title="Peças"),
-                    alt.Tooltip("total_custo_estimado:Q", title="Custo (R$)", format=",.2f")
+                    alt.Tooltip("total_itens_retirados:Q", title="Peças Retiradas")
                 ]
             ).properties(height=310)
             st.altair_chart(chart_centros, use_container_width=True)
@@ -497,7 +470,6 @@ def _render_sub_dashboard_estoque() -> None:
             "estoque_minimo",
             "unidade_medida",
             "alerta_texto",
-            "valor_unitario",
             "localizacao_almoxarifado"
         ]
         df_grid = df_itens[colunas_exibir].rename(columns={
@@ -508,7 +480,6 @@ def _render_sub_dashboard_estoque() -> None:
             "estoque_minimo": "Estoque Mínimo",
             "unidade_medida": "UN",
             "alerta_texto": "Situação do Estoque",
-            "valor_unitario": "Preço Un. (R$)",
             "localizacao_almoxarifado": "Localização"
         })
         st.dataframe(df_grid, use_container_width=True, hide_index=True)
@@ -574,7 +545,6 @@ def _render_sub_baixa_estoque(usuario_logado: Optional[Dict[str, Any]]) -> None:
             st.markdown(f"""
             <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid #1e293b; border-radius: 8px; padding: 10px 14px; margin: 6px 0 14px 0; font-size: 0.85rem; color: #cbd5e1;">
                 📍 <strong>Localização no Almoxarifado:</strong> {item_obj.get('localizacao_almoxarifado', 'Prateleira Geral')} &nbsp;|&nbsp; 
-                💵 <strong>Valor Unitário:</strong> R$ {float(item_obj.get('valor_unitario', 0.0)):,.2f} &nbsp;|&nbsp; 
                 📦 <strong>Disponível:</strong> <strong style="color: #38bdf8;">{item_obj['quantidade_atual']} {item_obj['unidade_medida']}</strong>
             </div>
             """, unsafe_allow_html=True)
@@ -772,9 +742,8 @@ def _render_sub_contagem_fisica(usuario_logado: Optional[Dict[str, Any]], is_adm
                     col_c3, col_c4 = st.columns(2)
                     with col_c3:
                         f_qtd_inicial = st.number_input("Quantidade Contada na Prateleira *", min_value=0, max_value=5000, value=0, step=1)
-                        f_min = st.number_input("Estoque Mínimo *", min_value=1, max_value=500, value=5, step=1)
                     with col_c4:
-                        f_preco = st.number_input("Valor Estimado Unitário (R$)", min_value=0.0, value=30.0, step=5.0)
+                        f_min = st.number_input("Estoque Mínimo *", min_value=1, max_value=500, value=5, step=1)
 
                     btn_cad_cont = st.form_submit_button("Cadastrar e Incluir na Contagem 💾", use_container_width=True)
                     if btn_cad_cont:
@@ -788,7 +757,6 @@ def _render_sub_contagem_fisica(usuario_logado: Optional[Dict[str, Any]], is_adm
                                 "quantidade_atual": f_qtd_inicial,
                                 "estoque_minimo": f_min,
                                 "unidade_medida": f_unid,
-                                "valor_unitario": f_preco,
                                 "localizacao_almoxarifado": f_local
                             }
                             with st.spinner("Cadastrando material..."):
@@ -1093,8 +1061,6 @@ def _render_sub_config_estoque_minimo(is_admin: bool) -> None:
                 # Card de Detalhes do Material Selecionado
                 saldo_f = int(item_atual.get("quantidade_atual", 0))
                 min_f = int(item_atual.get("estoque_minimo", 0))
-                preco_f = float(item_atual.get("valor_unitario", 0.0))
-                valor_tot = saldo_f * preco_f
 
                 cor_status = "#f87171" if saldo_f < min_f else ("#fbbf24" if saldo_f <= min_f * 1.25 else "#34d399")
 
@@ -1129,12 +1095,6 @@ def _render_sub_config_estoque_minimo(is_admin: bool) -> None:
                                 <div style="font-size: 0.75rem; color: #94a3b8;">Estoque Mínimo</div>
                                 <div style="font-size: 1.25rem; font-weight: 800; color: #f59e0b;">
                                     {min_f} <span style="font-size: 0.85rem; font-weight: 600;">{item_atual.get('unidade_medida', 'UN')}</span>
-                                </div>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 0.75rem; color: #94a3b8;">Valor Unitário</div>
-                                <div style="font-size: 1.25rem; font-weight: 800; color: #34d399;">
-                                    R$ {preco_f:,.2f}
                                 </div>
                             </div>
                         </div>
@@ -1180,7 +1140,7 @@ def _render_sub_config_estoque_minimo(is_admin: bool) -> None:
                             disabled=not is_admin
                         )
 
-                    c_min, c_val, c_loc = st.columns(3)
+                    c_min, c_loc = st.columns(2)
                     with c_min:
                         novo_minimo = st.number_input(
                             "Estoque Mínimo Fixo *",
@@ -1190,16 +1150,6 @@ def _render_sub_config_estoque_minimo(is_admin: bool) -> None:
                             step=1,
                             disabled=not is_admin,
                             help="Quantidade mínima de segurança para disparar alertas imediatos de compra."
-                        )
-                    with c_val:
-                        novo_valor_un = st.number_input(
-                            "Valor Unitário Estimado (R$)",
-                            min_value=0.0,
-                            max_value=50000.0,
-                            value=float(item_atual.get("valor_unitario", 0.0)),
-                            step=5.0,
-                            format="%.2f",
-                            disabled=not is_admin
                         )
                     with c_loc:
                         nova_localizacao = st.text_input(
@@ -1221,7 +1171,6 @@ def _render_sub_config_estoque_minimo(is_admin: bool) -> None:
                                     nome=novo_nome.strip(),
                                     categoria=nova_cat,
                                     estoque_minimo=novo_minimo,
-                                    valor_unitario=novo_valor_un,
                                     localizacao=nova_localizacao,
                                     codigo_referencia=novo_cod,
                                     unidade_medida=nova_unid
@@ -1265,12 +1214,10 @@ def _render_sub_config_estoque_minimo(is_admin: bool) -> None:
             with col_n5:
                 estoque_min_novo = st.number_input("Estoque Mínimo de Segurança *", min_value=1, max_value=500, value=5, step=1, disabled=not is_admin)
 
-            col_n6, col_n7, col_n8 = st.columns(3)
+            col_n6, col_n7 = st.columns(2)
             with col_n6:
                 un_medida = st.selectbox("Unidade de Medida *", UNIDADES_MEDIDA_ESTOQUE, disabled=not is_admin)
             with col_n7:
-                preco_un = st.number_input("Preço Unitário Estimado (R$)", min_value=0.0, max_value=50000.0, value=50.0, step=5.0, format="%.2f", disabled=not is_admin)
-            with col_n8:
                 local_almox = st.text_input("Localização / Prateleira", value="Prateleira Central", disabled=not is_admin)
 
             btn_criar_item = st.form_submit_button("Cadastrar Material no Almoxarifado 🚀", use_container_width=True, disabled=not is_admin)
@@ -1286,7 +1233,6 @@ def _render_sub_config_estoque_minimo(is_admin: bool) -> None:
                             "quantidade_atual": saldo_inicial,
                             "estoque_minimo": estoque_min_novo,
                             "unidade_medida": un_medida,
-                            "valor_unitario": preco_un,
                             "localizacao_almoxarifado": local_almox
                         })
                         if sucesso:
