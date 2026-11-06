@@ -1391,3 +1391,390 @@
                 }
             }
 
+
+            /* ==============================================================
+               TELA DE LOGIN SPLIT-SCREEN (MODELO ORDERMANAGER / GESTÃO INTELIGENTE)
+               ============================================================== */
+
+            /* Container principal que une a coluna esquerda (banner) e direita (formulário branco) */
+            div[data-testid="stHorizontalBlock"]:has(#login-split-left-marker) {
+                max-width: 1080px !important;
+                margin: 0.75rem auto 2rem auto !important;
+                gap: 0 !important;
+                border-radius: 24px !important;
+                overflow: hidden !important;
+                box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.75) !important;
+                border: 1px solid rgba(56, 189, 248, 0.18) !important;
+                background: #ffffff !important;
+                align-items: stretch !important;
+            }
+
+            /* Coluna Esquerda: Ilustração Isométrica Dark Cyber-Logistics (100% da altura) */
+            div[data-testid="column"]:has(#login-split-left-marker),
+            div[data-testid="stColumn"]:has(#login-split-left-marker) {
+                padding: 0 !important;
+                margin: 0 !important;
+                background: linear-gradient(155deg, #040b18 0%, #091a36 45%, #16113a 100%) !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: stretch !important;
+            }
+
+            div[data-testid="column"]:has(#login-split-left-marker) > div,
+            div[data-testid="stColumn"]:has(#login-split-left-marker) > div,
+            div[data-testid="stColumn"]:has(#login-split-left-marker) div[data-testid="stVerticalBlock"],
+            div[data-testid="stColumn"]:has(#login-split-left-marker) div[data-testid="stElementContainer"],
+            div[data-testid="stColumn"]:has(#login-split-left-marker) div[data-testid="stMarkdownContainer"] {
+                height: 100% !important;
+                flex: 1 1 auto !important;
+                display: flex !important;
+                flex-direction: column !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* Coluna Direita: Painel Branco Limpo */
+            div[data-testid="column"]:has(#login-split-right-marker),
+            div[data-testid="stColumn"]:has(#login-split-right-marker) {
+                background: #ffffff !important;
+                padding: 3.2rem 3.5rem !important;
+                margin: 0 !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: center !important;
+                color: #0f172a !important;
+            }
+
+            /* Remove borda/fundo escuro do stForm dentro da coluna branca de login */
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-testid="stForm"],
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-testid="stForm"] {
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+
+            /* Labels dos campos ("Email corporativo" e "Senha") bem visíveis em tom escuro no painel branco */
+            div[data-testid="column"]:has(#login-split-right-marker) label[data-testid="stWidgetLabel"],
+            div[data-testid="column"]:has(#login-split-right-marker) label[data-testid="stWidgetLabel"] p,
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-testid="stWidgetLabel"] label,
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-testid="stWidgetLabel"] p,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) label[data-testid="stWidgetLabel"],
+            div[data-testid="stColumn"]:has(#login-split-right-marker) label[data-testid="stWidgetLabel"] p,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-testid="stWidgetLabel"] label,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-testid="stWidgetLabel"] p {
+                color: #334155 !important;
+                font-weight: 600 !important;
+                font-size: 0.92rem !important;
+                margin-bottom: 6px !important;
+            }
+
+            /* Container externo do Input branco com borda única e limpa (sem borda dupla no olho da senha) */
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-baseweb="input"],
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-baseweb="input"] {
+                background-color: #ffffff !important;
+                border: 1.5px solid #cbd5e1 !important;
+                border-radius: 10px !important;
+                min-height: 48px !important;
+                box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+            }
+
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-baseweb="base-input"],
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-baseweb="base-input"] {
+                background-color: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+            }
+
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-baseweb="input"]:focus-within,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-baseweb="input"]:focus-within {
+                border-color: #2563eb !important;
+                background-color: #ffffff !important;
+                box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+            }
+
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-baseweb="base-input"]:focus-within,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-baseweb="base-input"]:focus-within {
+                border: none !important;
+                box-shadow: none !important;
+                background-color: transparent !important;
+            }
+
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-baseweb="input"] input,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-baseweb="input"] input {
+                color: #0f172a !important;
+                background-color: transparent !important;
+                font-size: 0.96rem !important;
+                padding: 10px 14px !important;
+            }
+
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-baseweb="input"] input::placeholder,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-baseweb="input"] input::placeholder {
+                color: #94a3b8 !important;
+                opacity: 1 !important;
+            }
+
+            /* Ícone de mostrar/ocultar senha dentro do input branco */
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-baseweb="input"] button,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-baseweb="input"] button {
+                color: #64748b !important;
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+            }
+
+            /* Checkbox "Lembrar-me" no painel branco */
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-testid="stCheckbox"] label span,
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-testid="stCheckbox"] p,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-testid="stCheckbox"] label span,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-testid="stCheckbox"] p {
+                color: #475569 !important;
+                font-size: 0.9rem !important;
+                font-weight: 400 !important;
+            }
+
+            /* Botão Azul Principal "Entrar no Sistema" (#2563EB) */
+            div[data-testid="column"]:has(#login-split-right-marker) button[kind="primaryFormSubmit"],
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-testid="stFormSubmitButton"] > button,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) button[kind="primaryFormSubmit"],
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-testid="stFormSubmitButton"] > button {
+                background: #2563eb !important;
+                border: 1px solid #2563eb !important;
+                color: #ffffff !important;
+                border-radius: 10px !important;
+                min-height: 50px !important;
+                font-size: 1rem !important;
+                font-weight: 600 !important;
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+                margin-top: 6px !important;
+            }
+
+            div[data-testid="column"]:has(#login-split-right-marker) button[kind="primaryFormSubmit"]:hover,
+            div[data-testid="column"]:has(#login-split-right-marker) div[data-testid="stFormSubmitButton"] > button:hover,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) button[kind="primaryFormSubmit"]:hover,
+            div[data-testid="stColumn"]:has(#login-split-right-marker) div[data-testid="stFormSubmitButton"] > button:hover {
+                background: #1d4ed8 !important;
+                border-color: #1d4ed8 !important;
+                box-shadow: 0 6px 16px rgba(29, 78, 216, 0.35) !important;
+                transform: translateY(-1px) !important;
+            }
+
+            /* Responsividade Mobile para o Login Split-Screen e Componentes de Campo */
+            @media (max-width: 768px) {
+                div[data-testid="stHorizontalBlock"]:has(#login-split-left-marker) {
+                    flex-direction: column-reverse !important;
+                    border-radius: 18px !important;
+                    margin: 0.25rem auto 1rem auto !important;
+                }
+                div[data-testid="column"]:has(#login-split-right-marker),
+                div[data-testid="stColumn"]:has(#login-split-right-marker) {
+                    padding: 1.75rem 1.35rem !important;
+                    min-width: 100% !important;
+                    flex: 1 1 100% !important;
+                }
+                div[data-testid="column"]:has(#login-split-left-marker),
+                div[data-testid="stColumn"]:has(#login-split-left-marker) {
+                    min-width: 100% !important;
+                    flex: 1 1 100% !important;
+                }
+                #login-split-left-marker {
+                    min-height: 210px !important;
+                    padding: 18px !important;
+                }
+                #login-split-left-marker > svg,
+                #login-split-left-marker > div:first-of-type {
+                    display: none !important;
+                }
+
+                /* Menu Principal (Segmented Control) e Atalhos Rápidos com Rolagem Horizontal Suave (Estilo App Nativo) */
+                div[data-testid="stSegmentedControl"] > div,
+                div[data-baseweb="button-group"] {
+                    display: flex !important;
+                    flex-wrap: nowrap !important;
+                    overflow-x: auto !important;
+                    -webkit-overflow-scrolling: touch !important;
+                    scrollbar-width: none !important;
+                    gap: 6px !important;
+                    padding-bottom: 4px !important;
+                }
+                div[data-testid="stSegmentedControl"] > div::-webkit-scrollbar,
+                div[data-baseweb="button-group"]::-webkit-scrollbar {
+                    display: none !important;
+                }
+                div[data-testid="stSegmentedControl"] button,
+                div[data-baseweb="button-group"] button {
+                    flex: 0 0 auto !important;
+                    white-space: nowrap !important;
+                    min-height: 40px !important;
+                    padding: 0.45rem 0.85rem !important;
+                    font-size: 0.84rem !important;
+                }
+
+                /* Pílulas de Radio Horizontal (Atalhos Rápidos de Consulta) deslizáveis no celular */
+                div[data-testid="stRadio"] > div[role="radiogroup"] {
+                    display: flex !important;
+                    flex-wrap: nowrap !important;
+                    overflow-x: auto !important;
+                    -webkit-overflow-scrolling: touch !important;
+                    scrollbar-width: none !important;
+                    gap: 8px !important;
+                    padding-bottom: 6px !important;
+                }
+                div[data-testid="stRadio"] > div[role="radiogroup"]::-webkit-scrollbar {
+                    display: none !important;
+                }
+                div[data-testid="stRadio"] > div[role="radiogroup"] > label {
+                    flex: 0 0 auto !important;
+                    white-space: nowrap !important;
+                    background: rgba(30, 41, 59, 0.75) !important;
+                    border: 1px solid rgba(56, 189, 248, 0.22) !important;
+                    border-radius: 999px !important;
+                    padding: 6px 12px !important;
+                    margin: 0 !important;
+                }
+            }
+
+            /* Em telas de smartphone (< 560px), campos de formulário ocupam 100% da largura enquanto KPIs ficam 2x2 */
+            @media (max-width: 560px) {
+                div[data-testid="column"]:has([data-testid="stTextInput"]),
+                div[data-testid="column"]:has([data-testid="stSelectbox"]),
+                div[data-testid="column"]:has([data-testid="stDateInput"]),
+                div[data-testid="column"]:has([data-testid="stNumberInput"]),
+                div[data-testid="column"]:has([data-testid="stTextArea"]),
+                div[data-testid="column"]:has([data-testid="stFileUploader"]),
+                div[data-testid="stColumn"]:has([data-testid="stTextInput"]),
+                div[data-testid="stColumn"]:has([data-testid="stSelectbox"]),
+                div[data-testid="stColumn"]:has([data-testid="stDateInput"]),
+                div[data-testid="stColumn"]:has([data-testid="stNumberInput"]),
+                div[data-testid="stColumn"]:has([data-testid="stTextArea"]),
+                div[data-testid="stColumn"]:has([data-testid="stFileUploader"]) {
+                    min-width: 100% !important;
+                    flex: 1 1 100% !important;
+                }
+
+                /* Mantém KPIs em grade 2x2 compacta */
+                div[data-testid="column"]:has([data-testid="stMetric"]),
+                div[data-testid="stColumn"]:has([data-testid="stMetric"]) {
+                    min-width: 47% !important;
+                    flex: 1 1 47% !important;
+                }
+
+                /* Adapta a pré-visualização da Folha O.S. para caber 100% na tela do celular */
+                .gov-os-voucher {
+                    padding: 14px !important;
+                    font-size: 0.8rem !important;
+                }
+                .gov-os-voucher .os-header-flex {
+                    flex-direction: column !important;
+                    align-items: flex-start !important;
+                    gap: 8px !important;
+                }
+                .gov-os-voucher .os-header-right {
+                    text-align: left !important;
+                }
+                .gov-os-voucher table,
+                .gov-os-voucher tbody,
+                .gov-os-voucher tr,
+                .gov-os-voucher td {
+                    display: block !important;
+                    width: 100% !important;
+                }
+                .gov-os-voucher .os-signatures-flex {
+                    flex-direction: column !important;
+                    gap: 20px !important;
+                }
+            }
+
+            /* ==============================================================
+               CARDS MOBILE PARA HISTÓRICO & CONSULTA DE CHAMADOS (.os-card-mobile)
+               ============================================================== */
+            .os-card-mobile {
+                background: linear-gradient(145deg, #162032 0%, #0f172a 100%);
+                border: 1px solid #26354d;
+                border-left: 4px solid #38bdf8;
+                border-radius: 14px;
+                padding: 14px 16px;
+                margin-bottom: 10px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            }
+            .os-card-mobile.status-concluido {
+                border-left-color: #22c55e;
+            }
+            .os-card-mobile.status-pendente {
+                border-left-color: #f59e0b;
+            }
+            .os-card-mobile.status-estoque {
+                border-left-color: #38bdf8;
+            }
+            .os-card-top {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 8px;
+                margin-bottom: 8px;
+                flex-wrap: wrap;
+            }
+            .os-card-id {
+                font-size: 0.95rem;
+                font-weight: 800;
+                color: #f8fafc;
+            }
+            .os-card-ticket {
+                font-size: 0.78rem;
+                color: #38bdf8;
+                background: rgba(56, 189, 248, 0.12);
+                padding: 2px 8px;
+                border-radius: 6px;
+                font-weight: 700;
+            }
+            .os-card-unit {
+                font-size: 0.96rem;
+                font-weight: 700;
+                color: #e2e8f0;
+                margin-bottom: 4px;
+            }
+            .os-card-meta {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 6px 10px;
+                font-size: 0.80rem;
+                color: #94a3b8;
+                background: rgba(15, 23, 42, 0.55);
+                padding: 8px 10px;
+                border-radius: 8px;
+                margin-top: 8px;
+            }
+            .os-card-meta strong {
+                color: #f1f5f9;
+            }
+            .btn-whatsapp-os {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+                width: 100%;
+                min-height: 42px;
+                background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+                color: #ffffff !important;
+                text-decoration: none !important;
+                font-weight: 700;
+                font-size: 0.86rem;
+                border-radius: 8px;
+                padding: 8px 12px;
+                box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
+                transition: opacity 0.15s ease;
+            }
+            .btn-whatsapp-os:hover {
+                opacity: 0.92;
+            }
+
+            /* Permite que componentes HTML interativos com altura definida (ex: Impressão O.S. e Quadro de Assinatura Touch) fiquem visíveis */
+            iframe[title="streamlit.components.v1.html"]:not([height="0"]),
+            div[data-testid="stCustomComponentV1"]:has(iframe:not([height="0"])) {
+                position: relative !important;
+                width: 100% !important;
+                height: auto !important;
+                min-height: 52px !important;
+                overflow: visible !important;
+            }

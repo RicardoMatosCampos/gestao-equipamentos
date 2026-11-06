@@ -170,6 +170,7 @@ ABAS_SISTEMA: List[str] = [
     "📊 Dashboard Analítico",
     "📝 Nova Requisição",
     "📋 Consultar e Histórico",
+    "🗓️ Preventivas Trimestrais",
     "📦 Estoque & Centros de Custo",
     "⚙️ Gerenciar Cadastros (Admin)"
 ]

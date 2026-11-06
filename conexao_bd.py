@@ -67,6 +67,23 @@ def limpar_cache_dados() -> None:
         pass
 
 
+def limpar_cache_requisicoes() -> None:
+    """Limpa seletivamente apenas o cache de requisições (preservando catálogos fixos de unidades/setores)."""
+    try:
+        buscar_requisicoes.clear()
+    except Exception:
+        limpar_cache_dados()
+
+
+def limpar_cache_estoque() -> None:
+    """Limpa seletivamente apenas o cache do módulo de estoque e movimentações."""
+    try:
+        buscar_itens_estoque.clear()
+        buscar_movimentacoes_estoque.clear()
+    except Exception:
+        limpar_cache_dados()
+
+
 # ==============================================================================
 # AUTENTICAÇÃO COM SUPABASE AUTH
 # ==============================================================================
@@ -428,7 +445,7 @@ def inserir_requisicao(dados_requisicao: Dict[str, Any]) -> Tuple[bool, str, Opt
         try:
             resposta = supabase.table(TABLE_REQUISICOES).insert(payload).execute()
             registro = resposta.data[0] if resposta.data else None
-            limpar_cache_dados()
+            limpar_cache_requisicoes()
             return True, "Requisição gravada com sucesso no Supabase!", registro
         except Exception as inner_exc:
             msg = str(inner_exc)
@@ -437,7 +454,7 @@ def inserir_requisicao(dados_requisicao: Dict[str, Any]) -> Tuple[bool, str, Opt
                 payload_sem_np = {k: v for k, v in payload.items() if k != "numero_pedido"}
                 resposta = supabase.table(TABLE_REQUISICOES).insert(payload_sem_np).execute()
                 registro = resposta.data[0] if resposta.data else None
-                limpar_cache_dados()
+                limpar_cache_requisicoes()
                 return True, "Requisição gravada com sucesso no Supabase!", registro
 
             # Caso o banco tenha outros nomes de colunas ou chaves básicas
@@ -446,7 +463,7 @@ def inserir_requisicao(dados_requisicao: Dict[str, Any]) -> Tuple[bool, str, Opt
                 dados_filtrados = {k: v for k, v in dados_requisicao.items() if k in chaves_basicas}
                 resposta = supabase.table(TABLE_REQUISICOES).insert(dados_filtrados).execute()
                 registro = resposta.data[0] if resposta.data else None
-                limpar_cache_dados()
+                limpar_cache_requisicoes()
                 return True, "Requisição gravada com sucesso no Supabase!", registro
             raise inner_exc
     except Exception as exc:
@@ -508,7 +525,7 @@ def atualizar_requisicao_dados(
                     payload_alt["data_prevista_retorno"] = payload_alt.pop("data_prevista")
                 try:
                     supabase.table(TABLE_REQUISICOES).update(payload_alt).eq("id", id_requisicao).execute()
-                    limpar_cache_dados()
+                    limpar_cache_requisicoes()
                     return True, f"Chamado #{id_requisicao} atualizado com sucesso!"
                 except Exception as ex2:
                     msg = str(ex2)
@@ -521,10 +538,39 @@ def atualizar_requisicao_dados(
             else:
                 raise inner_exc
 
-        limpar_cache_dados()
+        limpar_cache_requisicoes()
         return True, f"Chamado #{id_requisicao} atualizado com sucesso!"
     except Exception as exc:
         return False, f"Erro ao atualizar chamado: {str(exc)}"
+
+
+def atualizar_requisicoes_em_lote(alteracoes: List[Dict[str, Any]]) -> Tuple[bool, str]:
+    """
+    Atualiza múltiplos chamados editados diretamente na tabela (st.data_editor) de uma só vez,
+    invalidando o cache de requisições apenas ao final do lote.
+    """
+    if not alteracoes:
+        return True, "Nenhuma alteração pendente."
+    atualizados = 0
+    erros: List[str] = []
+    for alt_item in alteracoes:
+        rid = alt_item.get("id")
+        if not rid:
+            continue
+        ok, msg = atualizar_requisicao_dados(
+            id_requisicao=int(rid),
+            novo_status=alt_item.get("status"),
+            numero_pedido=alt_item.get("numero_pedido"),
+            nova_data_prevista=alt_item.get("data_prevista")
+        )
+        if ok:
+            atualizados += 1
+        else:
+            erros.append(f"#{rid}: {msg}")
+    limpar_cache_requisicoes()
+    if erros and atualizados == 0:
+        return False, f"Erro ao salvar alterações: {'; '.join(erros)}"
+    return True, f"✅ {atualizados} chamado(s) atualizado(s) com sucesso em lote!"
 
 
 def atualizar_status_requisicao(id_requisicao: int, novo_status: str) -> Tuple[bool, str]:
@@ -534,12 +580,12 @@ def atualizar_status_requisicao(id_requisicao: int, novo_status: str) -> Tuple[b
     return atualizar_requisicao_dados(id_requisicao, novo_status=novo_status)
 
 
-
 @st.cache_data(ttl=120, show_spinner=False)
 def buscar_requisicoes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
-    Busca todo o histórico de requisições realizando JOIN automático com
-    as tabelas relacionais de unidades, setores, técnicos e equipamentos.
+    Busca o histórico de requisições realizando JOIN otimizado com as tabelas relacionais
+    (sem trafegar imagens pesadas em Base64 de assinaturas em cada linha da listagem).
+    As assinaturas são carregadas sob demanda apenas na emissão do Espelho da O.S.
 
     Returns:
         Tuple[List[Dict[str, Any]], Optional[str]]: Lista consolidada de chamados e eventual erro.
@@ -547,17 +593,33 @@ def buscar_requisicoes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
     try:
         supabase = iniciar_conexao()
         try:
-            resposta = supabase.table(TABLE_REQUISICOES).select(
-                "*, unidades(*), setores(*), tecnicos(*), equipamentos(*)"
-            ).order("id", desc=True).execute()
+            try:
+                # Consulta otimizada sem os blobs Base64 de assinatura
+                resposta = supabase.table(TABLE_REQUISICOES).select(
+                    "*, "
+                    "unidades(id, nome, porte, zona, empresa, nome_responsavel, cargo_responsavel), "
+                    "setores(id, nome, porte), "
+                    "tecnicos(id, nome), "
+                    "equipamentos(id, nome)"
+                ).order("id", desc=True).execute()
+            except Exception:
+                resposta = supabase.table(TABLE_REQUISICOES).select(
+                    "*, unidades(*), setores(*), tecnicos(*), equipamentos(*)"
+                ).order("id", desc=True).execute()
 
             linhas: List[Dict[str, Any]] = []
             for item in (resposta.data or []):
                 d = dict(item)
-                u = d.get("unidades") or {}
-                s = d.get("setores") or {}
-                t = d.get("tecnicos") or {}
-                eq = d.get("equipamentos") or {}
+                u = dict(d.get("unidades") or {})
+                s = dict(d.get("setores") or {})
+                t = dict(d.get("tecnicos") or {})
+                eq = dict(d.get("equipamentos") or {})
+
+                # Remove eventuais strings Base64 pesadas do objeto em cache da listagem
+                u.pop("assinatura_responsavel", None)
+                t.pop("assinatura", None)
+                d["unidades"] = u
+                d["tecnicos"] = t
 
                 d["unidade_nome"] = u.get("unidade") or u.get("nome") or ""
                 d["porte"] = u.get("porte") or s.get("porte") or ""
@@ -568,8 +630,8 @@ def buscar_requisicoes() -> Tuple[List[Dict[str, Any]], Optional[str]]:
                 d["tecnico_nome"] = t.get("nome") or ""
                 d["equipamento_nome"] = eq.get("nome") or ""
 
-                d["tecnico_assinatura"] = t.get("assinatura") or ""
-                d["unidade_assinatura"] = u.get("assinatura_responsavel") or ""
+                d["tecnico_assinatura"] = ""
+                d["unidade_assinatura"] = ""
                 d["unidade_resp_nome"] = u.get("nome_responsavel") or ""
                 d["unidade_resp_cargo"] = u.get("cargo_responsavel") or ""
 
@@ -1102,8 +1164,9 @@ def restaurar_catalogo_padrao_zerado(responsavel: str = "Admin") -> Tuple[bool, 
     return True, "Catálogo de 21 materiais redefinido com saldo zerado e movimentações limpas! Pronto para a próxima contagem."
 
 
+@st.cache_data(ttl=600, show_spinner=False)
 def verificar_tabelas_estoque_ativas() -> bool:
-    """Verifica se as tabelas de estoque já foram criadas no Supabase."""
+    """Verifica se as tabelas de estoque já foram criadas no Supabase (com cache de 10 min)."""
     try:
         supabase = iniciar_conexao()
         supabase.table(TABLE_ESTOQUE_ITENS).select("id").limit(1).execute()
@@ -1237,7 +1300,7 @@ def registrar_baixa_estoque(
                 "observacao": remover_emojis(observacao)
             }).execute()
 
-            limpar_cache_dados()
+            limpar_cache_estoque()
             return True, f"Baixa de {quantidade} {item.get('unidade_medida', 'UN')} realizada com sucesso! Novo saldo: {novo_saldo}."
         except Exception as exc:
             return False, f"Erro ao registrar baixa no Supabase: {str(exc)}"
@@ -1278,8 +1341,62 @@ def registrar_baixa_estoque(
         "data_movimentacao": time.strftime("%Y-%m-%d %H:%M")
     }
     movs_mem.insert(0, nova_mov)
-    limpar_cache_dados()
+    limpar_cache_estoque()
     return True, f"Baixa de {quantidade} {alvo.get('unidade_medida', 'UN')} realizada com sucesso! Novo saldo: {novo_saldo}."
+
+
+def dar_baixa_estoque_por_chamado(
+    chamado_dict: Dict[str, Any],
+    responsavel: str = "Admin"
+) -> Tuple[bool, str]:
+    """
+    Integra uma Ordem de Serviço (Requisição) diretamente ao Estoque:
+    Localiza o material correspondente pelo nome, verifica duplicidade pelo ID da requisição
+    e registra a baixa automática para a Unidade de Saúde atendida.
+    """
+    req_id = chamado_dict.get("id")
+    equip_nome = str(chamado_dict.get("equipamento_nome") or chamado_dict.get("item_solicitado") or "").strip()
+    qtd = max(1, int(chamado_dict.get("quantidade") or 1))
+    unidade_id = chamado_dict.get("unidade_id")
+    unidade_nome = str(chamado_dict.get("unidade_nome") or "Unidade").strip()
+    num_chamado = str(chamado_dict.get("numero_chamado") or f"#{req_id}").strip()
+
+    if not equip_nome:
+        return False, "Material não identificado na requisição para baixa no estoque."
+
+    itens_est, _, _ = buscar_itens_estoque()
+    if not itens_est:
+        return False, "Catálogo de estoque vazio."
+
+    nome_busca = equip_nome.lower()
+    item_alvo = next((it for it in itens_est if str(it.get("nome", "")).strip().lower() == nome_busca), None)
+    if not item_alvo:
+        item_alvo = next((it for it in itens_est if nome_busca in str(it.get("nome", "")).lower() or str(it.get("nome", "")).lower() in nome_busca), None)
+
+    if not item_alvo:
+        return False, f"Material '{equip_nome}' não encontrado no catálogo de estoque."
+
+    # Evita baixa duplicada para o mesmo chamado
+    if req_id:
+        movs_recentes = buscar_movimentacoes_estoque(limite=200)
+        ja_baixado = any(
+            m.get("tipo") == "SAIDA_CONSUMO" and (
+                m.get("requisicao_id") == req_id or f"O.S. #{req_id}" in str(m.get("observacao", ""))
+            )
+            for m in movs_recentes
+        )
+        if ja_baixado:
+            return False, f"A baixa de estoque para a O.S. #{req_id} já foi registrada anteriormente."
+
+    obs_baixa = f"Baixa integrada O.S. #{req_id} (Chamado: {num_chamado}) - Destino: {unidade_nome}"
+    return registrar_baixa_estoque(
+        item_id=int(item_alvo["id"]),
+        quantidade=qtd,
+        unidade_id=unidade_id,
+        responsavel=responsavel,
+        observacao=obs_baixa,
+        requisicao_id=int(req_id) if req_id else None
+    )
 
 
 def registrar_entrada_estoque(
@@ -1319,7 +1436,7 @@ def registrar_entrada_estoque(
                 "observacao": remover_emojis(observacao)
             }).execute()
 
-            limpar_cache_dados()
+            limpar_cache_estoque()
             return True, f"Entrada de {quantidade} {item.get('unidade_medida', 'UN')} registrada! Novo saldo: {novo_saldo}."
         except Exception as exc:
             return False, f"Erro ao registrar entrada no Supabase: {str(exc)}"
@@ -1348,7 +1465,7 @@ def registrar_entrada_estoque(
         "data_movimentacao": time.strftime("%Y-%m-%d %H:%M")
     }
     movs_mem.insert(0, nova_mov)
-    limpar_cache_dados()
+    limpar_cache_estoque()
     return True, f"Entrada de {quantidade} {alvo.get('unidade_medida', 'UN')} registrada! Novo saldo: {novo_saldo}."
 
 
@@ -1394,7 +1511,7 @@ def registrar_ajuste_contagem_fisica(
                 "observacao": remover_emojis(detalhes)
             }).execute()
 
-            limpar_cache_dados()
+            limpar_cache_estoque()
             return True, f"Contagem física registrada com sucesso! Saldo corrigido para {quantidade_contada} (Diferença: {diferenca:+d})."
         except Exception as exc:
             return False, f"Erro ao registrar contagem no Supabase: {str(exc)}"
@@ -1425,7 +1542,7 @@ def registrar_ajuste_contagem_fisica(
         "data_movimentacao": time.strftime("%Y-%m-%d %H:%M")
     }
     movs_mem.insert(0, nova_mov)
-    limpar_cache_dados()
+    limpar_cache_estoque()
     return True, f"Contagem física registrada com sucesso! Saldo corrigido para {quantidade_contada} (Diferença: {diferenca:+d})."
 
 
@@ -1435,19 +1552,63 @@ def registrar_contagem_fisica_em_massa(
     observacao_padrao: str = "Inventário físico geral"
 ) -> Tuple[bool, str]:
     """
-    Registra a contagem de múltiplos itens simultaneamente no inventário físico.
-    itens_contados: Lista de dicts com {'item_id': int, 'quantidade_contada': int, 'observacao': str (opcional)}
+    Registra a contagem de múltiplos itens simultaneamente no inventário físico de forma otimizada:
+    1 única leitura de saldos atuais + batch insert de movimentações + 1 limpeza de cache ao final.
     """
     if not itens_contados:
         return False, "Nenhum item informado para atualização de contagem."
 
+    tabelas_ativas = verificar_tabelas_estoque_ativas()
+    if tabelas_ativas:
+        try:
+            supabase = iniciar_conexao()
+            res_todos = supabase.table(TABLE_ESTOQUE_ITENS).select("id, quantidade_atual").execute()
+            mapa_saldos = {int(r["id"]): int(r.get("quantidade_atual", 0)) for r in (res_todos.data or [])}
+
+            movs_lote: List[Dict[str, Any]] = []
+            atualizados = 0
+            resp_limpo = remover_emojis(responsavel)
+
+            for reg in itens_contados:
+                item_id = int(reg.get("item_id", 0))
+                if not item_id or item_id not in mapa_saldos:
+                    continue
+                qtd_contada = max(0, int(reg.get("quantidade_contada", 0)))
+                saldo_ant = mapa_saldos[item_id]
+                dif = qtd_contada - saldo_ant
+                obs_item = reg.get("observacao") or observacao_padrao
+                detalhes = f"Contagem física: Anterior={saldo_ant}, Contado={qtd_contada} (Dif: {dif:+d}). {obs_item}".strip()
+
+                supabase.table(TABLE_ESTOQUE_ITENS).update({
+                    "quantidade_atual": qtd_contada,
+                    "data_atualizacao": "now()"
+                }).eq("id", item_id).execute()
+
+                movs_lote.append({
+                    "item_id": item_id,
+                    "tipo": "AJUSTE_CONTAGEM",
+                    "quantidade": abs(dif),
+                    "saldo_anterior": saldo_ant,
+                    "saldo_posterior": qtd_contada,
+                    "responsavel": resp_limpo,
+                    "observacao": remover_emojis(detalhes)
+                })
+                atualizados += 1
+
+            if movs_lote:
+                supabase.table(TABLE_ESTOQUE_MOVIMENTACOES).insert(movs_lote).execute()
+
+            limpar_cache_estoque()
+            return True, f"Inventário atualizado com sucesso! {atualizados} materiais tiveram seus saldos conferidos em lote."
+        except Exception as exc:
+            return False, f"Erro ao registrar contagem em lote no Supabase: {str(exc)}"
+
     atualizados = 0
-    erros = []
     for reg in itens_contados:
         item_id = reg.get("item_id")
         qtd = reg.get("quantidade_contada", 0)
         obs_item = reg.get("observacao") or observacao_padrao
-        ok, msg = registrar_ajuste_contagem_fisica(
+        ok, _ = registrar_ajuste_contagem_fisica(
             item_id=item_id,
             quantidade_contada=qtd,
             responsavel=responsavel,
@@ -1455,13 +1616,8 @@ def registrar_contagem_fisica_em_massa(
         )
         if ok:
             atualizados += 1
-        else:
-            erros.append(f"Item #{item_id}: {msg}")
 
-    if erros and atualizados == 0:
-        return False, f"Falha na contagem geral: {'; '.join(erros)}"
-
-    limpar_cache_dados()
+    limpar_cache_estoque()
     return True, f"Inventário atualizado com sucesso! {atualizados} materiais tiveram seus saldos conferidos."
 
 
@@ -1501,7 +1657,7 @@ def atualizar_item_estoque(
         try:
             supabase = iniciar_conexao()
             supabase.table(TABLE_ESTOQUE_ITENS).update(payload).eq("id", item_id).execute()
-            limpar_cache_dados()
+            limpar_cache_estoque()
             return True, "Parâmetros do item atualizados com sucesso no Supabase!"
         except Exception as exc:
             return False, f"Erro ao atualizar item: {str(exc)}"
@@ -1511,7 +1667,7 @@ def atualizar_item_estoque(
     if not alvo:
         return False, "Item não encontrado."
     alvo.update(payload)
-    limpar_cache_dados()
+    limpar_cache_estoque()
     return True, "Parâmetros do item atualizados com sucesso!"
 
 
@@ -1522,7 +1678,7 @@ def excluir_item_estoque(item_id: int) -> Tuple[bool, str]:
         try:
             supabase = iniciar_conexao()
             supabase.table(TABLE_ESTOQUE_ITENS).update({"ativo": False}).eq("id", item_id).execute()
-            limpar_cache_dados()
+            limpar_cache_estoque()
             return True, "Material inativado com sucesso no Supabase!"
         except Exception as exc:
             return False, f"Erro ao inativar material: {str(exc)}"
@@ -1531,7 +1687,7 @@ def excluir_item_estoque(item_id: int) -> Tuple[bool, str]:
     idx = next((i for i, it in enumerate(itens_mem) if it["id"] == item_id), None)
     if idx is not None:
         itens_mem.pop(idx)
-        limpar_cache_dados()
+        limpar_cache_estoque()
         return True, "Material removido do catálogo com sucesso!"
     return False, "Material não encontrado."
 
@@ -1560,7 +1716,7 @@ def inserir_novo_item_estoque(dados: Dict[str, Any]) -> Tuple[bool, str]:
         try:
             supabase = iniciar_conexao()
             supabase.table(TABLE_ESTOQUE_ITENS).insert(payload).execute()
-            limpar_cache_dados()
+            limpar_cache_estoque()
             return True, f"Material '{nome}' cadastrado com sucesso no Supabase!"
         except Exception as exc:
             msg = str(exc)
@@ -1572,7 +1728,7 @@ def inserir_novo_item_estoque(dados: Dict[str, Any]) -> Tuple[bool, str]:
                     payload_com_id = dict(payload)
                     payload_com_id["id"] = proximo_id
                     supabase.table(TABLE_ESTOQUE_ITENS).insert(payload_com_id).execute()
-                    limpar_cache_dados()
+                    limpar_cache_estoque()
                     return True, f"Material '{nome}' cadastrado com sucesso no Supabase!"
                 except Exception as inner_e:
                     return False, f"Erro ao cadastrar material no Supabase: {str(inner_e)}"
@@ -1583,27 +1739,28 @@ def inserir_novo_item_estoque(dados: Dict[str, Any]) -> Tuple[bool, str]:
     item_novo = dict(payload)
     item_novo["id"] = novo_id
     itens_mem.append(item_novo)
-    limpar_cache_dados()
+    limpar_cache_estoque()
     return True, f"Material '{nome}' cadastrado com sucesso!"
 
 
 @st.cache_data(ttl=30, show_spinner=False)
 def buscar_movimentacoes_estoque(limite: int = 100) -> List[Dict[str, Any]]:
-    """Busca o histórico recente de movimentações de estoque com detalhes da unidade e item."""
+    """Busca o histórico recente de movimentações de estoque reaproveitando catálogos em cache."""
     tabelas_ativas = verificar_tabelas_estoque_ativas()
 
     if tabelas_ativas:
         try:
             supabase = iniciar_conexao()
-            # Busca movimentações e complementa com unidades e itens
             res_movs = supabase.table(TABLE_ESTOQUE_MOVIMENTACOES).select("*").order("data_movimentacao", desc=True).limit(limite).execute()
             movs = res_movs.data or []
             if not movs:
                 return []
 
-            # Mapeia nomes de itens e unidades
-            itens_map = {it["id"]: it["nome"] for it in (supabase.table(TABLE_ESTOQUE_ITENS).select("id, nome").execute().data or [])}
-            unidades_map = {u["id"]: u.get("unidade") or u.get("nome") or f"Unidade #{u['id']}" for u in (supabase.table(TABLE_UNIDADES).select("*").execute().data or [])}
+            # Reaproveita os catálogos já em cache em vez de disparar novas queries sem cache
+            itens_cache, _, _ = buscar_itens_estoque()
+            unidades_cache, _ = buscar_unidades()
+            itens_map = {it["id"]: it["nome"] for it in itens_cache if "id" in it and "nome" in it}
+            unidades_map = {u["id"]: u.get("unidade") or u.get("nome") or f"Unidade #{u['id']}" for u in unidades_cache if "id" in u}
 
             for m in movs:
                 m["item_nome"] = itens_map.get(m.get("item_id"), f"Item #{m.get('item_id')}")

@@ -20,18 +20,26 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+import constantes
+importlib.reload(constantes)
 import conexao_bd
+importlib.reload(conexao_bd)
 from conexao_bd import (
     gerar_token_sessao,
     validar_token_sessao,
     identificar_tecnico_por_email,
 )
+import components.voucher_os as voucher_os
+importlib.reload(voucher_os)
 from components.voucher_os import (
     gerar_termo_html,
+    gerar_link_whatsapp_os,
     render_acoes_impressao_voucher,
 )
 import components.estoque_view as estoque_view
 from components.estoque_view import render_aba_estoque
+import components.preventivas_view as preventivas_view
+importlib.reload(preventivas_view)
 
 from constantes import (
     APP_TITLE,
@@ -63,7 +71,6 @@ st.set_page_config(
 )
 
 
-@st.cache_data(show_spinner=False)
 def carregar_css() -> str:
     """Carrega o arquivo de estilos CSS corporativo do diretório assets/styles.css."""
     caminho_css = os.path.join(os.path.dirname(__file__), "assets", "styles.css")
@@ -225,19 +232,31 @@ def aplicar_estilos_customizados() -> None:
                 } catch(e) {}
             }
 
-            // Observador de mutações para novos elementos adicionados dinamicamente
-            try {
-                const observer = new MutationObserver(function() {
+            // Observador otimizado com debounce (sem setInterval contínuo que drena bateria e causa lag ao digitar no celular)
+            let debounceTimer = null;
+            function agendarAtualizacaoLeve() {
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(function() {
                     desbloquearDigitacaoSelectMobile();
                     inicializarAutoCloseSidebarMobile();
-                    traduzirCalendarioPtBr();
+                    if (parentDoc.querySelector('div[data-baseweb="calendar"], div[data-baseweb="popover"], div[data-baseweb="menu"], ul[role="listbox"]')) {
+                        traduzirCalendarioPtBr();
+                    }
+                }, 140);
+            }
+
+            try {
+                const observer = new MutationObserver(function(mutations) {
+                    for (let i = 0; i < mutations.length; i++) {
+                        if (mutations[i].addedNodes && mutations[i].addedNodes.length > 0) {
+                            agendarAtualizacaoLeve();
+                            break;
+                        }
+                    }
                 });
-                observer.observe(parentDoc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['readonly', 'inputmode'] });
+                observer.observe(parentDoc.body, { childList: true, subtree: true });
             } catch(e) {}
 
-            setInterval(desbloquearDigitacaoSelectMobile, 400);
-            setInterval(inicializarAutoCloseSidebarMobile, 1000);
-            setInterval(traduzirCalendarioPtBr, 250);
             desbloquearDigitacaoSelectMobile();
             inicializarAutoCloseSidebarMobile();
             traduzirCalendarioPtBr();
@@ -268,7 +287,7 @@ def obter_perfil_e_abas(email: Optional[str], is_admin: bool) -> Tuple[str, List
     if any(k in em for k in ["dash", "gestor", "fiscal", "diretor", "visualizador", "painel"]):
         return "Gestor / Visualizador (Dashboard Executivo)", [ABAS_SISTEMA[0]]
 
-    return "Técnico de TI", [aba for aba in ABAS_SISTEMA if "Admin" not in aba]
+    return "Técnico de TI", [aba for aba in ABAS_SISTEMA if "Admin" not in aba and "Estoque" not in aba]
 
 
 def inicializar_sessao() -> None:
@@ -309,7 +328,7 @@ def inicializar_sessao() -> None:
 # ==============================================================================
 
 def render_tela_login() -> None:
-    """Renderiza a interface de login executiva e institucional com suporte a Supabase Auth e auditoria."""
+    """Renderiza a interface de login split-screen (modelo OrderManager / Gestão Inteligente)."""
     st.markdown("""
         <script>
         if (window.location.hash && window.location.hash.includes('access_token')) {
@@ -326,39 +345,152 @@ def render_tela_login() -> None:
         </script>
     """, unsafe_allow_html=True)
 
-    _, col_login, _ = st.columns([1, 2.4, 1])
+    col_esq, col_dir = st.columns([1.05, 1])
 
-    with col_login:
-        # Cabeçalho Institucional com Brasão Vetorial
+    # ==========================================================================
+    # LADO ESQUERDO: PAINEL VISUAL CYBER-LOGISTICS ISOMÉTRICO + CARD GLASS
+    # ==========================================================================
+    with col_esq:
+        html_painel_esquerdo = (
+            '<div id="login-split-left-marker" style="position: relative; width: 100%; height: 100%; min-height: 640px; '
+            'background: linear-gradient(155deg, #040b18 0%, #091a36 45%, #16113a 100%); overflow: hidden; '
+            'display: flex; flex-direction: column; justify-content: space-between; padding: 32px; box-sizing: border-box;">'
+            '<svg viewBox="0 0 600 650" fill="none" xmlns="http://www.w3.org/2000/svg" '
+            'style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.95; pointer-events: none;">'
+            '<defs>'
+            '<radialGradient id="glow_center" cx="55%" cy="42%" r="48%">'
+            '<stop offset="0%" stop-color="#00f2fe" stop-opacity="0.35"/>'
+            '<stop offset="50%" stop-color="#0284c7" stop-opacity="0.14"/>'
+            '<stop offset="100%" stop-color="#040b18" stop-opacity="0"/>'
+            '</radialGradient>'
+            '<linearGradient id="cyan_line" x1="0%" y1="0%" x2="100%" y2="100%">'
+            '<stop offset="0%" stop-color="#00f2fe" stop-opacity="0.95"/>'
+            '<stop offset="100%" stop-color="#38bdf8" stop-opacity="0.25"/>'
+            '</linearGradient>'
+            '<linearGradient id="cube_top" x1="0%" y1="0%" x2="100%" y2="100%">'
+            '<stop offset="0%" stop-color="#38bdf8"/>'
+            '<stop offset="100%" stop-color="#0284c7"/>'
+            '</linearGradient>'
+            '<linearGradient id="cube_left" x1="0%" y1="0%" x2="0%" y2="100%">'
+            '<stop offset="0%" stop-color="#0284c7"/>'
+            '<stop offset="100%" stop-color="#0f294a"/>'
+            '</linearGradient>'
+            '<linearGradient id="cube_right" x1="0%" y1="0%" x2="0%" y2="100%">'
+            '<stop offset="0%" stop-color="#0369a1"/>'
+            '<stop offset="100%" stop-color="#081c38"/>'
+            '</linearGradient>'
+            '</defs>'
+            '<rect width="600" height="650" fill="url(#glow_center)"/>'
+            '<g stroke="#1e3a5f" stroke-width="0.8" opacity="0.45">'
+            '<line x1="0" y1="120" x2="600" y2="420"/>'
+            '<line x1="0" y1="220" x2="600" y2="520"/>'
+            '<line x1="0" y1="320" x2="600" y2="620"/>'
+            '<line x1="100" y1="40" x2="600" y2="290"/>'
+            '<line x1="600" y1="120" x2="0" y2="420"/>'
+            '<line x1="600" y1="220" x2="0" y2="520"/>'
+            '<line x1="600" y1="320" x2="0" y2="620"/>'
+            '<line x1="500" y1="40" x2="0" y2="290"/>'
+            '</g>'
+            '<g stroke="url(#cyan_line)" stroke-width="2.4" stroke-linecap="round">'
+            '<path d="M350 250 L230 190 L290 155"/>'
+            '<path d="M350 250 L470 190 L525 220"/>'
+            '<path d="M350 250 L475 315"/>'
+            '<path d="M350 250 L225 315 L155 280"/>'
+            '<path d="M350 250 L350 375 L270 420"/>'
+            '<path d="M475 315 L540 280"/>'
+            '<path d="M230 190 L165 225"/>'
+            '<path d="M350 250 L420 130"/>'
+            '</g>'
+            '<g fill="#00f2fe">'
+            '<circle cx="230" cy="190" r="4"/>'
+            '<circle cx="165" cy="225" r="3.5"/>'
+            '<circle cx="155" cy="280" r="3.5"/>'
+            '<circle cx="270" cy="420" r="4"/>'
+            '<circle cx="525" cy="220" r="3.5"/>'
+            '<circle cx="540" cy="280" r="3.5"/>'
+            '<circle cx="420" cy="130" r="4"/>'
+            '</g>'
+            '<g transform="translate(350, 250)">'
+            '<polygon points="0,-46 80,-6 0,34 -80,-6" fill="#0b223e" stroke="#00f2fe" stroke-width="2"/>'
+            '<polygon points="0,-38 66,-5 0,28 -66,-5" fill="#103158" stroke="#38bdf8" stroke-width="1" opacity="0.8"/>'
+            '<polygon points="0,-78 38,-59 0,-40 -38,-59" fill="url(#cube_top)" stroke="#7dd3fc" stroke-width="1.2"/>'
+            '<polygon points="-38,-59 0,-40 0,2 -38,-17" fill="url(#cube_left)" stroke="#38bdf8" stroke-width="1.2"/>'
+            '<polygon points="38,-59 0,-40 0,2 38,-17" fill="url(#cube_right)" stroke="#00f2fe" stroke-width="1.2"/>'
+            '<line x1="-19" y1="-68.5" x2="19" y2="-49.5" stroke="#bae6fd" stroke-width="2"/>'
+            '</g>'
+            '<g transform="translate(290, 145)">'
+            '<polygon points="0,-24 44,-2 0,20 -44,-2" fill="#0b223e" stroke="#38bdf8" stroke-width="1.5"/>'
+            '<polygon points="0,-48 24,-36 0,-24 -24,-36" fill="url(#cube_top)" stroke="#7dd3fc" stroke-width="1"/>'
+            '<polygon points="-24,-36 0,-24 0,0 -24,-12" fill="url(#cube_left)" stroke="#38bdf8" stroke-width="1"/>'
+            '<polygon points="24,-36 0,-24 0,0 24,-12" fill="url(#cube_right)" stroke="#00f2fe" stroke-width="1"/>'
+            '</g>'
+            '<g transform="translate(475, 315)">'
+            '<polygon points="0,-26 48,-2 0,22 -48,-2" fill="#0b223e" stroke="#00f2fe" stroke-width="1.6"/>'
+            '<polygon points="0,-52 24,-40 0,-28 -24,-40" fill="url(#cube_top)" stroke="#7dd3fc" stroke-width="1"/>'
+            '<polygon points="-24,-40 0,-28 0,-2 -24,-14" fill="url(#cube_left)" stroke="#38bdf8" stroke-width="1"/>'
+            '<polygon points="24,-40 0,-28 0,-2 24,-14" fill="url(#cube_right)" stroke="#00f2fe" stroke-width="1"/>'
+            '</g>'
+            '<g transform="translate(225, 315)">'
+            '<polygon points="0,-24 44,-2 0,20 -44,-2" fill="#0b223e" stroke="#38bdf8" stroke-width="1.5"/>'
+            '<polygon points="0,-48 22,-37 0,-26 -22,-37" fill="url(#cube_top)" stroke="#7dd3fc" stroke-width="1"/>'
+            '<polygon points="-22,-37 0,-26 0,-2 -22,-13" fill="url(#cube_left)" stroke="#38bdf8" stroke-width="1"/>'
+            '<polygon points="22,-37 0,-26 0,-2 22,-13" fill="url(#cube_right)" stroke="#00f2fe" stroke-width="1"/>'
+            '</g>'
+            '<g transform="translate(350, 380)">'
+            '<polygon points="0,-24 44,-2 0,20 -44,-2" fill="#0b223e" stroke="#00f2fe" stroke-width="1.5"/>'
+            '<polygon points="0,-48 22,-37 0,-26 -22,-37" fill="url(#cube_top)" stroke="#7dd3fc" stroke-width="1"/>'
+            '<polygon points="-22,-37 0,-26 0,-2 -22,-13" fill="url(#cube_left)" stroke="#38bdf8" stroke-width="1"/>'
+            '<polygon points="22,-37 0,-26 0,-2 22,-13" fill="url(#cube_right)" stroke="#00f2fe" stroke-width="1"/>'
+            '</g>'
+            '</svg>'
+            '<div style="position: relative; z-index: 2; width: 185px; background: rgba(15, 34, 61, 0.65); '
+            'backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(56, 189, 248, 0.3); '
+            'border-radius: 12px; padding: 18px 16px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);">'
+            '<div style="text-align: center; color: #cbd5e1; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em;">LOGISTICS HUB</div>'
+            '<div style="text-align: center; color: #64748b; font-size: 0.52rem; letter-spacing: 0.06em; margin-bottom: 12px;">LOGIN TO YOUR ACCOUNT</div>'
+            '<div style="height: 22px; border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 5px; background: rgba(7, 19, 38, 0.55); '
+            'margin-bottom: 8px; padding: 2px 8px; font-size: 0.55rem; color: #64748b; display: flex; align-items: center;">Username</div>'
+            '<div style="height: 22px; border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 5px; background: rgba(7, 19, 38, 0.55); '
+            'margin-bottom: 10px; padding: 2px 8px; font-size: 0.55rem; color: #64748b; display: flex; align-items: center; justify-content: space-between;">'
+            '<span>Password</span><span>◉</span></div>'
+            '<div style="height: 24px; border-radius: 5px; background: linear-gradient(90deg, #00b4d8, #0077b6); color: #ffffff; '
+            'font-size: 0.58rem; font-weight: 700; display: flex; align-items: center; justify-content: center; letter-spacing: 0.06em;">SIGN IN</div>'
+            '</div>'
+            '<div style="position: relative; z-index: 2; background: rgba(30, 58, 95, 0.52); backdrop-filter: blur(14px); '
+            '-webkit-backdrop-filter: blur(14px); border: 1px solid rgba(125, 211, 252, 0.28); border-radius: 16px; '
+            'padding: 26px 28px; margin-top: auto; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.45);">'
+            '<div style="color: #ffffff; font-size: 1.65rem; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.02em;">Gestão Inteligente</div>'
+            '<div style="color: #e2e8f0; font-size: 0.95rem; line-height: 1.5; font-weight: 400;">'
+            'Controle seus pedidos, gerencie estoques e otimize sua logística com nossa plataforma de ponta a ponta.'
+            '</div>'
+            '</div>'
+            '</div>'
+        )
+        st.markdown(html_painel_esquerdo, unsafe_allow_html=True)
+
+    # ==========================================================================
+    # LADO DIREITO: PAINEL BRANCO CLEAN (ORDERMANAGER / BEM-VINDO DE VOLTA)
+    # ==========================================================================
+    with col_dir:
         st.markdown(
             """
-            <div class="gov-login-header">
-                <div style="display: flex; justify-content: center; margin-bottom: 12px;">
-                    <svg width="68" height="68" viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="72" height="72" rx="16" fill="url(#bg_grad)"/>
-                        <path d="M36 14L52 21V35C52 45.5 45.2 55.2 36 58C26.8 55.2 20 45.5 20 35V21L36 14Z" stroke="#38BDF8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="rgba(56, 189, 248, 0.08)"/>
-                        <path d="M36 26V44M27 35H45" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round"/>
-                        <circle cx="36" cy="35" r="3" fill="#38BDF8"/>
-                        <defs>
-                            <linearGradient id="bg_grad" x1="0" y1="0" x2="72" y2="72" gradientUnits="userSpaceOnUse">
-                                <stop stop-color="#0F172A"/>
-                                <stop offset="1" stop-color="#1E293B"/>
-                            </linearGradient>
-                        </defs>
-                    </svg>
+            <div id="login-split-right-marker">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 28px;">
+                    <div style="width: 44px; height: 44px; border-radius: 12px; background: #2563eb; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                        </svg>
+                    </div>
+                    <span style="font-size: 1.4rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em;">OrderManager</span>
                 </div>
-                <div>
-                    <span class="gov-badge-top">🛡️ SISTEMA CORPORATIVO DE TI • AMBIENTE SEGURO</span>
-                </div>
-                <h1 class="gov-portal-title">Portal de Gestão de Ativos & Ordens de TI</h1>
-                <p class="gov-portal-subtitle">
-                    Plataforma integrada para controle operacional de chamados, suporte a postos de saúde e gestão de contratos públicos e privados.
+                <h1 style="font-size: 1.85rem; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; letter-spacing: -0.02em;">
+                    Bem-vindo de volta
+                </h1>
+                <p style="font-size: 0.95rem; color: #64748b; margin: 0 0 24px 0; line-height: 1.45;">
+                    Insira suas credenciais para acessar o painel de pedidos.
                 </p>
-                <div class="gov-security-bar">
-                    <span><span class="gov-status-dot"></span> Servidor Ativo (Supabase Cloud)</span>
-                    <span>🔒 TLS 1.3 Criptografado</span>
-                    <span>🏛️ Auditoria LGPD Ativa</span>
-                </div>
             </div>
             """,
             unsafe_allow_html=True
@@ -368,13 +500,11 @@ def render_tela_login() -> None:
         access_token_param = st.query_params.get("access_token")
         refresh_token_param = st.query_params.get("refresh_token", "")
         if access_token_param:
-            st.info("🎉 Link de ativação identificado com sucesso! Defina sua credencial definitiva de acesso abaixo:")
+            st.info("🎉 Link de ativação identificado! Defina sua nova senha abaixo:")
             with st.form(key="form_definir_senha_link"):
-                st.subheader("🔑 Cadastrar Nova Senha Pessoal")
-                st.caption("Defina uma senha segura para autenticação contínua nas estações de trabalho.")
-                nova_senha_1 = st.text_input("Nova Senha *", type="password", placeholder="Mínimo 6 caracteres...")
-                nova_senha_2 = st.text_input("Confirme a Nova Senha *", type="password", placeholder="Repita a senha...")
-                btn_salvar_senha = st.form_submit_button("Salvar Credencial e Ingressar 🚀", use_container_width=True)
+                nova_senha_1 = st.text_input("Nova Senha", type="password", placeholder="Mínimo 6 caracteres...")
+                nova_senha_2 = st.text_input("Confirme a Nova Senha", type="password", placeholder="Repita a senha...")
+                btn_salvar_senha = st.form_submit_button("Salvar Nova Senha", use_container_width=True)
 
                 if btn_salvar_senha:
                     if not nova_senha_1 or len(nova_senha_1) < 6:
@@ -394,29 +524,28 @@ def render_tela_login() -> None:
                             st.rerun()
                         else:
                             st.error(f"❌ {msg_pwd}")
-            st.divider()
 
-        # Formulário Unificado de Autenticação Corporativa (Seguro e Institucional)
+        # Formulário de Login estilo OrderManager
         with st.form(key="form_login_principal"):
-            st.markdown("##### 👤 Autenticação de Usuário")
-            email_login = st.text_input("E-mail de Acesso (Supabase Auth) *", placeholder="ex: seu.nome@empresa.com.br")
-            senha_login = st.text_input("Senha de Acesso *", type="password", placeholder="Digite sua senha...")
+            email_login = st.text_input("Email corporativo", placeholder="voce@empresa.com.br")
+            senha_login = st.text_input("Senha", type="password", placeholder="••••••••")
 
-            destino_inicial = st.radio(
-                "🎯 Destino Inicial:",
-                options=["📊 Dashboard Analítico", "📝 Nova Requisição", "📋 Consultar Histórico"],
-                index=0,
-                horizontal=True
-            )
+            col_lembrar, col_esqueci = st.columns([1, 1])
+            with col_lembrar:
+                lembrar_me = st.checkbox("Lembrar-me", value=True)
+            with col_esqueci:
+                st.markdown(
+                    '<div style="text-align: right; padding-top: 6px;"><a href="#recuperar" style="color: #2563eb; font-size: 0.88rem; font-weight: 600; text-decoration: none;">Esqueci minha senha</a></div>',
+                    unsafe_allow_html=True
+                )
 
-            st.write("")
-            btn_entrar = st.form_submit_button("Acessar Plataforma 🚀", use_container_width=True)
+            btn_entrar = st.form_submit_button("Entrar no Sistema", use_container_width=True)
 
         if btn_entrar:
             if not email_login or not senha_login:
-                st.warning("⚠️ Preencha seu e-mail funcional e senha para continuar.")
+                st.warning("⚠️ Informe seu email corporativo e senha para continuar.")
             else:
-                with st.spinner("Autenticando credenciais no Supabase..."):
+                with st.spinner("Autenticando..."):
                     sucesso, msg, user, _ = conexao_bd.fazer_login(email_login, senha_login)
 
                 if sucesso and user:
@@ -427,43 +556,39 @@ def render_tela_login() -> None:
                     st.session_state["usuario_perfil"] = perfil_calc
                     st.session_state["tecnico_fixado"] = identificar_tecnico_por_email(user.email)
 
-                    # Persistência de Sessão Segura
-                    token = gerar_token_sessao({
-                        "email": user.email,
-                        "id": getattr(user, "id", "user"),
-                        "perfil": st.session_state["usuario_perfil"],
-                        "is_admin": st.session_state["is_admin"]
-                    })
-                    if token:
-                        st.query_params["session_token"] = token
+                    if lembrar_me:
+                        token = gerar_token_sessao({
+                            "email": user.email,
+                            "id": getattr(user, "id", "user"),
+                            "perfil": st.session_state["usuario_perfil"],
+                            "is_admin": st.session_state["is_admin"]
+                        })
+                        if token:
+                            st.query_params["session_token"] = token
 
-                    if len(abas_calc) == 1:
-                        st.session_state["aba_selecionada"] = abas_calc[0]
-                    elif destino_inicial == "📊 Dashboard Analítico":
-                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[0]
-                    elif destino_inicial == "📝 Nova Requisição":
-                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[1]
-                    else:
-                        st.session_state["aba_selecionada"] = ABAS_SISTEMA[2]
-
-                    st.success("✅ Acesso autorizado com sucesso! Carregando painel...")
+                    st.session_state["aba_selecionada"] = abas_calc[0]
                     st.rerun()
                 else:
                     st.error(f"❌ {msg}")
 
-        st.caption("🔒 Acesso restrito a profissionais autorizados. Para novo cadastro ou redefinição de acesso, contate o Administrador de TI.")
+        with st.expander("🔑 Esqueceu sua senha? Receber link de redefinição", expanded=False):
+            with st.form(key="form_recuperar_senha_login"):
+                email_rec = st.text_input("Informe seu email corporativo cadastrado:", placeholder="voce@empresa.com.br")
+                btn_rec = st.form_submit_button("Enviar Link de Recuperação", use_container_width=True)
+                if btn_rec:
+                    if not email_rec or "@" not in email_rec:
+                        st.warning("⚠️ Informe um email válido.")
+                    else:
+                        ok_rec, msg_rec = conexao_bd.solicitar_recuperacao_senha(email_rec)
+                        if ok_rec:
+                            st.success(f"✅ {msg_rec}")
+                        else:
+                            st.error(f"❌ {msg_rec}")
 
-        # Rodapé Institucional com Aviso Legal e LGPD
         st.markdown(
             """
-            <div class="gov-compliance-notice">
-                <strong>⚖️ Aviso Legal & Confidencialidade (LGPD):</strong><br>
-                Este portal destina-se exclusivamente ao uso técnico e operacional autorizado. 
-                Todas as consultas, emissões de ordens de serviço e movimentações de patrimônio de TI são registradas 
-                para fins de auditoria, conformidade com a Lei Federal nº 13.709/2018 (LGPD) e prestação de contas de contratos públicos.
-            </div>
-            <div class="gov-footer-credentials">
-                Portal de Gestão de Ativos & Ordens de TI • Versão 3.3 • Contrato Operacional Ativo
+            <div style="text-align: center; margin-top: 16px; font-size: 0.9rem; color: #64748b;">
+                Não tem uma conta? <span style="color: #2563eb; font-weight: 600; cursor: pointer;">Fale com o administrador</span>
             </div>
             """,
             unsafe_allow_html=True
@@ -518,7 +643,7 @@ def render_barra_lateral() -> None:
 
         st.markdown('<div class="sidebar-nav-title">Navegação Rápida</div>', unsafe_allow_html=True)
         is_admin = bool(st.session_state.get("is_admin", False))
-        abas_permitidas = ABAS_SISTEMA if is_admin else [aba for aba in ABAS_SISTEMA if "Admin" not in aba]
+        abas_permitidas = ABAS_SISTEMA if is_admin else [aba for aba in ABAS_SISTEMA if "Admin" not in aba and "Estoque" not in aba]
         aba_atual_side = st.session_state.get("aba_selecionada", abas_permitidas[0])
 
         for aba_nome in abas_permitidas:
@@ -618,9 +743,15 @@ def render_aba_dashboard() -> None:
 
     df = pd.DataFrame(registros)
 
-    # Filtros Rápidos do Dashboard
-    with st.expander("🔍 Filtros Executivos de Análise", expanded=False):
-        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+    # Filtros Rápidos do Dashboard (incluindo Filtro por Período para Fechamento Mensal/SLA)
+    with st.expander("🔍 Filtros Executivos de Análise (Período, Porte, Zona, Status)", expanded=False):
+        col_f0, col_f1, col_f2, col_f3, col_f4 = st.columns([1.3, 1, 1, 1, 1])
+        with col_f0:
+            f_periodo = st.selectbox(
+                "Período de Análise:",
+                ["Todo o Período", "Este Mês", "Mês Passado", "Últimos 30 Dias", "Últimos 7 Dias", "Intervalo Personalizado"],
+                key="dash_f_periodo"
+            )
         with col_f1:
             portes_disponiveis = ["Todos"] + sorted(list(df["porte"].dropna().unique())) if "porte" in df.columns else ["Todos"]
             f_porte = st.selectbox("Filtrar por Porte:", portes_disponiveis, key="dash_f_porte")
@@ -633,7 +764,34 @@ def render_aba_dashboard() -> None:
         with col_f4:
             f_status = st.selectbox("Status:", ["Todos"] + OPCOES_STATUS, key="dash_f_status")
 
+        dt_ini_dash, dt_fim_dash = None, None
+        if f_periodo == "Intervalo Personalizado":
+            c_dt1, c_dt2, _ = st.columns([1, 1, 2])
+            with c_dt1:
+                dt_ini_dash = st.date_input("Data Inicial:", value=date.today() - timedelta(days=30), format="DD/MM/YYYY", key="dash_dt_ini")
+            with c_dt2:
+                dt_fim_dash = st.date_input("Data Final:", value=date.today(), format="DD/MM/YYYY", key="dash_dt_fim")
+
     df_dash = df.copy()
+    col_dt_base = "data" if "data" in df_dash.columns else ("data_criacao" if "data_criacao" in df_dash.columns else None)
+    if col_dt_base and f_periodo != "Todo o Período":
+        dt_s = pd.to_datetime(df_dash[col_dt_base], errors="coerce").dt.date
+        hoje_d = date.today()
+        if f_periodo == "Este Mês":
+            df_dash = df_dash[dt_s.apply(lambda d: bool(d and d.year == hoje_d.year and d.month == hoje_d.month))]
+        elif f_periodo == "Mês Passado":
+            primeiro_este = hoje_d.replace(day=1)
+            ultimo_passado = primeiro_este - timedelta(days=1)
+            df_dash = df_dash[dt_s.apply(lambda d: bool(d and d.year == ultimo_passado.year and d.month == ultimo_passado.month))]
+        elif f_periodo == "Últimos 30 Dias":
+            limite_30 = hoje_d - timedelta(days=30)
+            df_dash = df_dash[dt_s.apply(lambda d: bool(d and d >= limite_30))]
+        elif f_periodo == "Últimos 7 Dias":
+            limite_7 = hoje_d - timedelta(days=7)
+            df_dash = df_dash[dt_s.apply(lambda d: bool(d and d >= limite_7))]
+        elif f_periodo == "Intervalo Personalizado" and dt_ini_dash and dt_fim_dash:
+            df_dash = df_dash[dt_s.apply(lambda d: bool(d and dt_ini_dash <= d <= dt_fim_dash))]
+
     if f_porte != "Todos" and "porte" in df_dash.columns:
         df_dash = df_dash[df_dash["porte"] == f_porte]
     if f_zona != "Todas" and "zona" in df_dash.columns:
@@ -665,38 +823,55 @@ def render_aba_dashboard() -> None:
     qtd_preventivas = int(tipo_serie.str.contains("Preventiva", case=False, na=False).sum())
     taxa_preventiva = (qtd_preventivas / total_chamados * 100) if total_chamados > 0 else 0
 
-    # Verificação de Ordens com Prazo Expirado (Atraso de SLA)
+    # Verificação de Ordens com Prazo Expirado (Atraso de SLA) e Vencendo em 24h (SLA Preventivo)
     hoje = date.today()
-    def verificar_atraso(row):
+    amanha = hoje + timedelta(days=1)
+
+    def _extrair_dt_prev(row):
         st_val = str(row.get("status", ""))
         if any(term in st_val.lower() for term in ["concluído", "concluido", "devolvido"]):
-            return False
+            return None
         data_prev = row.get("data_prevista_retorno")
         if not data_prev or pd.isna(data_prev):
-            return False
+            return None
         try:
             if isinstance(data_prev, str):
-                dt = pd.to_datetime(data_prev, errors="coerce").date()
-            elif isinstance(data_prev, (pd.Timestamp, date)):
-                dt = data_prev if isinstance(data_prev, date) else data_prev.date()
-            else:
-                return False
-            return dt < hoje if dt else False
+                return pd.to_datetime(data_prev, errors="coerce").date()
+            if isinstance(data_prev, (pd.Timestamp, date)):
+                return data_prev if isinstance(data_prev, date) else data_prev.date()
         except Exception:
-            return False
+            pass
+        return None
 
-    df_dash["em_atraso"] = df_dash.apply(verificar_atraso, axis=1)
+    datas_prev_ativas = df_dash.apply(_extrair_dt_prev, axis=1)
+    df_dash["em_atraso"] = datas_prev_ativas.apply(lambda dt: bool(dt and dt < hoje))
+    df_dash["vencendo_breve"] = datas_prev_ativas.apply(lambda dt: bool(dt and hoje <= dt <= amanha))
     total_atrasados = int(df_dash["em_atraso"].sum())
+    total_vencendo_breve = int(df_dash["vencendo_breve"].sum())
 
-    # BANNER DE CONFORMIDADE DE SLA (IDÊNTICO AO APP MOBILE)
+    # BANNER DE CONFORMIDADE DE SLA (COM ALERTA PREDITIVO DE 24H)
     if total_atrasados > 0:
+        msg_extra_sla = f" Além disso, há <strong>{total_vencendo_breve} chamado(s) vencendo hoje/amanhã</strong>." if total_vencendo_breve > 0 else ""
         st.markdown(
             f"""
             <div style="background: rgba(239, 68, 68, 0.12); border: 1.5px solid #ef4444; border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
                 <span style="font-size: 1.6rem;">⚠️</span>
                 <div>
                     <div style="font-weight: 700; color: #f87171; font-size: 0.95rem;">Atenção: {total_atrasados} ordem(ns) de serviço em atraso!</div>
-                    <div style="color: #cbd5e1; font-size: 0.82rem;">Existem chamados com prazo estipulado de SLA expirado que requerem intervenção prioritária.</div>
+                    <div style="color: #cbd5e1; font-size: 0.82rem;">Existem chamados com prazo estipulado de SLA expirado que requerem intervenção prioritária.{msg_extra_sla}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    elif total_vencendo_breve > 0:
+        st.markdown(
+            f"""
+            <div style="background: rgba(245, 158, 11, 0.12); border: 1.5px solid #f59e0b; border-radius: 12px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.6rem;">⏰</span>
+                <div>
+                    <div style="font-weight: 700; color: #fbbf24; font-size: 0.95rem;">Alerta Preventivo de SLA: {total_vencendo_breve} chamado(s) vencem hoje ou amanhã!</div>
+                    <div style="color: #cbd5e1; font-size: 0.82rem;">Nenhum chamado atrasado no momento, mas existem ordens próximas do vencimento contratual.</div>
                 </div>
             </div>
             """,
@@ -825,6 +1000,23 @@ def render_aba_dashboard() -> None:
                 "status": "Status Atual"
             })
             st.dataframe(df_atrasados, use_container_width=True, hide_index=True)
+
+    if total_vencendo_breve > 0:
+        with st.expander(f"⏰ Alerta Preventivo de SLA: {total_vencendo_breve} chamado(s) vencendo hoje ou amanhã", expanded=(total_atrasados == 0)):
+            st.caption("Acompanhamento preventivo para atuação da equipe técnica antes do vencimento do SLA de 48h.")
+            cols_breve = ["numero_chamado", "numero_pedido", "unidade_nome", "porte", "equipamento_nome", "tecnico_nome", "data_prevista_retorno", "status"]
+            cols_ex_breve = [c for c in cols_breve if c in df_dash.columns]
+            df_breve = df_dash[df_dash["vencendo_breve"]][cols_ex_breve].rename(columns={
+                "numero_chamado": "Chamado / O.S.",
+                "numero_pedido": "Nº Pedido Estoque",
+                "unidade_nome": "Unidade de Saúde",
+                "porte": "Porte",
+                "equipamento_nome": "Equipamento / Peça",
+                "tecnico_nome": "Técnico Responsável",
+                "data_prevista_retorno": "Previsão Limite",
+                "status": "Status Atual"
+            })
+            st.dataframe(df_breve, use_container_width=True, hide_index=True)
 
     # INSIGHTS RÁPIDOS DE GESTÃO (HIGHLIGHTS)
     top_eq_nome = df_dash["equipamento_nome"].value_counts().index[0] if "equipamento_nome" in df_dash.columns and not df_dash["equipamento_nome"].empty else "Nenhum"
@@ -1221,6 +1413,43 @@ def render_aba_nova_requisicao() -> None:
     else:
         trocar_tec = True
 
+    # Consulta Rápida de Pendências da Unidade para o Técnico em Campo (Evita Chamados Duplicados)
+    with st.expander("🔎 Verificar Chamados em Aberto / Peças Prontas de uma Unidade antes de abrir", expanded=False):
+        uni_check_label = st.selectbox(
+            "Selecione a Unidade para inspecionar pendências:",
+            options=["Selecione uma unidade..."] + list(dict_unidades.keys()),
+            key="sel_uni_check_previo"
+        )
+        if uni_check_label != "Selecione uma unidade...":
+            u_obj_chk = dict_unidades[uni_check_label]
+            uid_chk = u_obj_chk.get("id")
+            unome_chk = u_obj_chk.get("unidade") or u_obj_chk.get("nome") or ""
+            reqs_todas, _ = conexao_bd.buscar_requisicoes()
+            reqs_uni = [
+                r for r in (reqs_todas or [])
+                if (uid_chk and r.get("unidade_id") == uid_chk) or (unome_chk and r.get("unidade_nome") == unome_chk)
+            ]
+            abertas_uni = [
+                r for r in reqs_uni
+                if not any(t in str(r.get("status", "")).lower() for t in ["concluído", "concluido", "devolvido"])
+            ]
+            if abertas_uni:
+                st.warning(f"⚠️ Esta unidade já possui **{len(abertas_uni)} chamado(s) em aberto** no momento:")
+                df_ab_uni = pd.DataFrame(abertas_uni)[
+                    [c for c in ["id", "numero_chamado", "setor_nome", "equipamento_nome", "quantidade", "status", "tecnico_nome"] if c in abertas_uni[0]]
+                ].rename(columns={
+                    "id": "Protocolo",
+                    "numero_chamado": "Chamado",
+                    "setor_nome": "Setor",
+                    "equipamento_nome": "Material / Peça",
+                    "quantidade": "Qtd",
+                    "status": "Status Atual",
+                    "tecnico_nome": "Técnico"
+                })
+                st.dataframe(df_ab_uni, use_container_width=True, hide_index=True)
+            else:
+                st.success("✅ Nenhuma pendência em aberto para esta unidade!")
+
     with st.form(key="form_requisicao", clear_on_submit=True):
         st.subheader("Dados do Atendimento")
         col1, col2 = st.columns(2)
@@ -1325,6 +1554,15 @@ def render_aba_nova_requisicao() -> None:
             obj_set = dict_setores[label_setor]
             obj_eq = dict_equipamentos[label_equipamento]
 
+            # Verifica antes de gravar se já existia chamado em aberto para a mesma unidade e equipamento
+            reqs_existentes, _ = conexao_bd.buscar_requisicoes()
+            duplicados_abertos = [
+                r for r in (reqs_existentes or [])
+                if r.get("unidade_id") == obj_uni.get("id")
+                and r.get("equipamento_id") == obj_eq.get("id")
+                and not any(t in str(r.get("status", "")).lower() for t in ["concluído", "concluido", "devolvido"])
+            ]
+
             num_ped_limpo = numero_pedido.strip() if numero_pedido else ""
             status_inicial = OPCOES_STATUS[1] if num_ped_limpo else OPCOES_STATUS[0]
 
@@ -1350,6 +1588,9 @@ def render_aba_nova_requisicao() -> None:
             if sucesso:
                 id_protocolo = registro.get("id", "OK") if registro else "OK"
                 st.success(f"✅ Pedido gravado com sucesso! Protocolo: **#{id_protocolo}**")
+                if duplicados_abertos:
+                    ids_dup = ", ".join(f"#{d.get('id')}" for d in duplicados_abertos[:3])
+                    st.warning(f"ℹ️ **Aviso:** Esta unidade já possuía outro(s) chamado(s) em aberto para **{obj_eq.get('nome', label_equipamento)}** (Protocolo: {ids_dup}).")
 
                 nome_uni = obj_uni.get("unidade") or obj_uni.get("nome") or label_unidade
                 nome_set = obj_set.get("nome", label_setor)
@@ -1567,15 +1808,34 @@ def render_aba_consulta() -> None:
 
         st.divider()
 
-        # Filtros de Consulta e Busca Rápida por Digitação
-        st.markdown("##### 🔍 Pesquisa e Filtros de Atendimentos")
+        # Filtros de Consulta, Atalhos de 1 Clique (Técnico & Gestão) e Busca Rápida
+        st.markdown("##### 🔍 Pesquisa Rápida & Atalhos Operacionais")
+
+        # Identifica técnico logado para o filtro de 1 clique "Meus Chamados"
+        tec_logado_obj = st.session_state.get("tecnico_fixado") or identificar_tecnico_por_email(st.session_state.get("usuario_email"))
+        nome_tec_logado = tec_logado_obj.get("nome", "") if tec_logado_obj else ""
+
+        opcoes_atalhos = [
+            "📋 Todos",
+            "👤 Meus Chamados",
+            "📦 Prontos no Estoque",
+            "⏳ Pendentes",
+            "⏰ SLA Urgente / Atrasados"
+        ]
+        atalho_ativo = st.radio(
+            "Atalhos Rápidos de Consulta:",
+            options=opcoes_atalhos,
+            horizontal=True,
+            label_visibility="collapsed",
+            key="radio_atalho_rapido_consulta"
+        )
 
         # Campo de Digitação Direta
         col_busca_txt, col_btn_limpar = st.columns([5, 1])
         with col_busca_txt:
             termo_pesquisa = st.text_input(
                 "Pesquisa de Atendimentos",
-                placeholder="Digite para Buscar no Celular ou Computador...",
+                placeholder="Digite Chamado, Unidade, Setor, Peça ou Técnico para buscar...",
                 label_visibility="collapsed",
                 key="filtro_pesquisa_rapida_texto"
             )
@@ -1588,9 +1848,15 @@ def render_aba_consulta() -> None:
                 help="Limpa o campo de busca e restaura todos os chamados."
             )
 
-        # Filtros específicos por categoria (Dropdowns)
-        with st.expander("⚙️ Filtros Avançados por Categoria (Status, Unidade, Técnico, etc.)", expanded=False):
-            f1, f2, f3 = st.columns(3)
+        # Filtros específicos por categoria e período (Dropdowns)
+        with st.expander("⚙️ Filtros Avançados por Categoria e Período (Status, Unidade, Técnico, Data)", expanded=False):
+            f0, f1, f2, f3 = st.columns(4)
+            with f0:
+                filtro_periodo_cons = st.selectbox(
+                    "Período:",
+                    ["Todo o Período", "Este Mês", "Mês Passado", "Últimos 30 Dias", "Esta Semana"],
+                    key="f_cons_periodo"
+                )
             with f1:
                 filtro_status = st.selectbox("Status:", ["Todos"] + OPCOES_STATUS, key="f_cons_status")
             with f2:
@@ -1617,6 +1883,51 @@ def render_aba_consulta() -> None:
 
         # Aplica filtros em cascata
         df_filtrado = df.copy()
+
+        # 0. Filtro de Atalho Rápido de 1 Clique
+        if atalho_ativo == "👤 Meus Chamados":
+            if nome_tec_logado and col_t in df_filtrado.columns:
+                df_filtrado = df_filtrado[df_filtrado[col_t].astype(str).str.lower() == nome_tec_logado.lower()]
+            else:
+                st.info("ℹ️ Seu usuário não está vinculado a um técnico específico; exibindo todos os chamados.")
+        elif atalho_ativo == "📦 Prontos no Estoque":
+            if "status" in df_filtrado.columns:
+                df_filtrado = df_filtrado[df_filtrado["status"].astype(str).str.contains("Liberado|Pronto", case=False, na=False)]
+        elif atalho_ativo == "⏳ Pendentes":
+            if "status" in df_filtrado.columns:
+                df_filtrado = df_filtrado[df_filtrado["status"].astype(str).str.contains("Pendente", case=False, na=False)]
+        elif atalho_ativo == "⏰ SLA Urgente / Atrasados":
+            hoje_lim = date.today() + timedelta(days=1)
+            def _is_sla_urgente(row):
+                st_v = str(row.get("status", "")).lower()
+                if any(k in st_v for k in ["concluído", "concluido", "devolvido"]):
+                    return False
+                dp = row.get("data_prevista_retorno")
+                if not dp or pd.isna(dp):
+                    return False
+                try:
+                    dt_p = pd.to_datetime(dp, errors="coerce").date()
+                    return bool(dt_p and dt_p <= hoje_lim)
+                except Exception:
+                    return False
+            df_filtrado = df_filtrado[df_filtrado.apply(_is_sla_urgente, axis=1)]
+
+        # 0.5 Filtro de Período
+        if filtro_periodo_cons != "Todo o Período" and col_dt in df_filtrado.columns:
+            dt_c_ser = pd.to_datetime(df_filtrado[col_dt], errors="coerce").dt.date
+            hoje_c = date.today()
+            if filtro_periodo_cons == "Este Mês":
+                df_filtrado = df_filtrado[dt_c_ser.apply(lambda d: bool(d and d.year == hoje_c.year and d.month == hoje_c.month))]
+            elif filtro_periodo_cons == "Mês Passado":
+                prim_c = hoje_c.replace(day=1)
+                ult_ant = prim_c - timedelta(days=1)
+                df_filtrado = df_filtrado[dt_c_ser.apply(lambda d: bool(d and d.year == ult_ant.year and d.month == ult_ant.month))]
+            elif filtro_periodo_cons == "Últimos 30 Dias":
+                lim_30c = hoje_c - timedelta(days=30)
+                df_filtrado = df_filtrado[dt_c_ser.apply(lambda d: bool(d and d >= lim_30c))]
+            elif filtro_periodo_cons == "Esta Semana":
+                ini_sem_c = hoje_c - timedelta(days=hoje_c.weekday())
+                df_filtrado = df_filtrado[dt_c_ser.apply(lambda d: bool(d and d >= ini_sem_c))]
 
         # 1. Filtro por digitação textual livre (Funciona nativamente no celular)
         if termo_pesquisa and termo_pesquisa.strip():
@@ -1667,18 +1978,72 @@ def render_aba_consulta() -> None:
                 except Exception:
                     pass
 
-        # Visualização Responsiva e Otimizada da Tabela
-        col_vis_op, col_vis_cont = st.columns([3, 2])
+        is_adm_user = st.session_state.get("is_admin", False)
+
+        # Visualização Responsiva, Exportação e Edição em Lote da Tabela
+        col_vis_op, col_vis_edit, col_vis_exp = st.columns([2.5, 1.6, 1.2])
         with col_vis_op:
             modo_visualizacao = st.radio(
                 "Visualização das Colunas:",
-                options=["Visão Operacional", "Visão Completa"],
+                options=["Visão Operacional", "📱 Modo Cards (Celular)", "Visão Completa"],
                 horizontal=True,
                 label_visibility="collapsed",
                 key="radio_modo_tabela_consulta"
             )
-        with col_vis_cont:
-            st.caption(f"Mostrando {len(df_display)} chamados de acordo com filtros.")
+        with col_vis_edit:
+            modo_edicao_lote = False
+            if is_adm_user and modo_visualizacao != "📱 Modo Cards (Celular)":
+                modo_edicao_lote = st.toggle(
+                    "✏️ Edição Rápida em Lote na Tabela",
+                    value=False,
+                    key="toggle_edicao_lote_consulta",
+                    help="Permite alterar Status e Nº Pedido Estoque diretamente nas linhas da tabela e salvar tudo de uma vez."
+                )
+            else:
+                st.caption(f"Mostrando **{len(df_display)}** chamado(s).")
+        with col_vis_exp:
+            csv_export = df_display.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "📥 Exportar Planilha",
+                data=csv_export,
+                file_name=f"atendimentos_filtrados_{date.today().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+                key="btn_export_csv_consulta"
+            )
+
+        # Pré-monta dicionário de rótulos de chamados para permitir seleção com 1 toque nos Cards Mobile
+        base_chamados = df_filtrado if not df_filtrado.empty else df
+        opcoes_chamados = {}
+        mapa_id_para_label = {}
+        for _, row in base_chamados.iterrows():
+            rid = row['id']
+            chamado_num = str(row.get('numero_chamado') or row.get('ticket') or '').strip()
+            unidade = str(row.get('unidade_nome') or row.get('unidade') or '').strip()
+            setor = str(row.get('setor_nome') or row.get('setor') or '').strip()
+            material = str(row.get('equipamento_nome') or row.get('item_solicitado') or 'Material').strip()
+            tecnico = str(row.get('tecnico_nome') or row.get('tecnico_responsavel') or '').strip()
+
+            partes = [f"Protocolo #{rid}"]
+            if chamado_num:
+                partes.append(f"Chamado: {chamado_num}")
+            if unidade:
+                partes.append(f"UBS: {unidade}")
+            if setor:
+                partes.append(f"({setor})")
+            partes.append(f"• {material}")
+            if tecnico:
+                partes.append(f"[{tecnico}]")
+
+            label = " | ".join(partes)
+            opcoes_chamados[label] = rid
+            mapa_id_para_label[rid] = label
+
+        if not opcoes_chamados:
+            for _, row in df.iterrows():
+                lbl_fb = f"Protocolo #{row['id']}"
+                opcoes_chamados[lbl_fb] = row['id']
+                mapa_id_para_label[row['id']] = lbl_fb
 
         colunas_operacionais = [
             "ID", "Chamado / Ticket", "Nº Pedido Estoque", "Status",
@@ -1693,29 +2058,149 @@ def render_aba_consulta() -> None:
         else:
             df_tabela_show = df_display
 
-        config_colunas_df = {
-            "ID": st.column_config.NumberColumn("ID", width="small", format="%d"),
-            "Chamado / Ticket": st.column_config.TextColumn("Chamado", width="small"),
-            "Nº Pedido Estoque": st.column_config.TextColumn("Pedido Estoque", width="small"),
-            "Status": st.column_config.TextColumn("Status", width="medium"),
-            "Previsão de Retorno": st.column_config.TextColumn("Previsão SLA", width="small"),
-            "Data Solicitação": st.column_config.TextColumn("Solicitação", width="small"),
-            "Unidade de Saúde": st.column_config.TextColumn("Unidade de Saúde", width="medium"),
-            "Setor / Departamento": st.column_config.TextColumn("Setor", width="medium"),
-            "Material / Equipamento": st.column_config.TextColumn("Material / Peça", width="medium"),
-            "Qtd": st.column_config.NumberColumn("Qtd", width="small", format="%d"),
-            "Técnico Responsável": st.column_config.TextColumn("Técnico", width="medium"),
-            "Porte": st.column_config.TextColumn("Porte", width="small"),
-            "Empresa / Lote": st.column_config.TextColumn("Empresa / Lote", width="small"),
-            "Zona / Região": st.column_config.TextColumn("Zona", width="small"),
-        }
+        if modo_visualizacao == "📱 Modo Cards (Celular)":
+            st.caption("📱 **Visão Otimizada para Celular:** Toque em **Selecionar p/ Baixa ou O.S.** para carregar o chamado no painel abaixo ou envie direto pelo **WhatsApp**.")
+            limite_cards = 25
+            df_cards_iter = base_chamados.head(limite_cards)
+            for _, r_card in df_cards_iter.iterrows():
+                cid = r_card.get("id")
+                st_card = formatar_status_para_ui(r_card.get("status"))
+                if "Concluído" in st_card or "Entregue" in st_card:
+                    cls_st = "status-concluido"
+                elif "Estoque" in st_card:
+                    cls_st = "status-estoque"
+                else:
+                    cls_st = "status-pendente"
 
-        st.dataframe(
-            df_tabela_show,
-            use_container_width=True,
-            hide_index=True,
-            column_config=config_colunas_df
-        )
+                num_ch_card = str(r_card.get("numero_chamado") or r_card.get("ticket") or "Sem Ticket").strip()
+                num_ped_card = str(r_card.get("numero_pedido") or "—").strip()
+                if num_ped_card.lower() == "none" or not num_ped_card:
+                    num_ped_card = "—"
+                uni_card = str(r_card.get("unidade_nome") or r_card.get("unidade") or "Unidade não informada")
+                set_card = str(r_card.get("setor_nome") or r_card.get("setor") or "Geral")
+                mat_card = str(r_card.get("equipamento_nome") or r_card.get("item_solicitado") or "Equipamento")
+                qtd_card = int(r_card.get("quantidade") or 1)
+                tec_card = str(r_card.get("tecnico_nome") or r_card.get("tecnico_responsavel") or "Técnico")
+                prev_raw = r_card.get("data_prevista_retorno")
+                try:
+                    prev_fmt = pd.to_datetime(prev_raw).strftime("%d/%m/%Y") if pd.notna(prev_raw) and prev_raw else "—"
+                except Exception:
+                    prev_fmt = str(prev_raw or "—")
+
+                wpp_card_url = gerar_link_whatsapp_os(r_card.to_dict())
+
+                st.markdown(
+                    f"""
+                    <div class="os-card-mobile {cls_st}">
+                        <div class="os-card-top">
+                            <span class="os-card-id">Protocolo #{cid}</span>
+                            <span class="os-card-ticket">🎫 {num_ch_card}</span>
+                        </div>
+                        <div class="os-card-unit">🏥 {uni_card} <span style="font-weight:400; color:#94a3b8; font-size:0.84rem;">({set_card})</span></div>
+                        <div style="font-size:0.84rem; color:#38bdf8; font-weight:600; margin-bottom:4px;">{st_card}</div>
+                        <div class="os-card-meta">
+                            <div>💻 <strong>Material:</strong> {qtd_card}x {mat_card}</div>
+                            <div>📦 <strong>Pedido:</strong> {num_ped_card}</div>
+                            <div>👨‍💻 <strong>Técnico:</strong> {tec_card}</div>
+                            <div>📅 <strong>Prazo SLA:</strong> {prev_fmt}</div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                c_act1, c_act2 = st.columns(2)
+                with c_act1:
+                    if st.button(f"⚡ Selecionar #{cid} p/ Baixa ou O.S.", key=f"btn_sel_card_mob_{cid}", use_container_width=True):
+                        lbl_alvo = mapa_id_para_label.get(cid)
+                        if lbl_alvo:
+                            st.session_state["sel_chamado_update"] = lbl_alvo
+                            st.toast(f"✅ Protocolo #{cid} selecionado no painel abaixo!", icon="🔄")
+                            st.rerun()
+                with c_act2:
+                    st.markdown(
+                        f'<a href="{wpp_card_url}" target="_blank" rel="noopener noreferrer" class="btn-whatsapp-os">'
+                        f'📲 Enviar #{cid} no WhatsApp</a>',
+                        unsafe_allow_html=True
+                    )
+            if len(base_chamados) > limite_cards:
+                st.caption(f"Exibindo os {limite_cards} chamados mais recentes no modo Cards. Use a busca acima para refinar.")
+        elif modo_edicao_lote and not df_tabela_show.empty:
+            st.info("💡 **Modo de Edição em Lote Ativo:** Altere a coluna **Status** ou **Pedido Estoque** em quantas linhas desejar e clique em **Salvar Edições em Lote** abaixo da tabela.")
+            cols_bloqueadas = [c for c in df_tabela_show.columns if c not in ["Status", "Nº Pedido Estoque"]]
+            config_editor_df = {
+                "ID": st.column_config.NumberColumn("ID", width="small", format="%d", disabled=True),
+                "Chamado / Ticket": st.column_config.TextColumn("Chamado", width="small", disabled=True),
+                "Nº Pedido Estoque": st.column_config.TextColumn("Pedido Estoque ✏️", width="small"),
+                "Status": st.column_config.SelectboxColumn("Status ✏️", options=OPCOES_STATUS, width="medium", required=True),
+                "Previsão de Retorno": st.column_config.TextColumn("Previsão SLA", width="small", disabled=True),
+                "Data Solicitação": st.column_config.TextColumn("Solicitação", width="small", disabled=True),
+                "Unidade de Saúde": st.column_config.TextColumn("Unidade de Saúde", width="medium", disabled=True),
+                "Setor / Departamento": st.column_config.TextColumn("Setor", width="medium", disabled=True),
+                "Material / Equipamento": st.column_config.TextColumn("Material / Peça", width="medium", disabled=True),
+                "Qtd": st.column_config.NumberColumn("Qtd", width="small", format="%d", disabled=True),
+                "Técnico Responsável": st.column_config.TextColumn("Técnico", width="medium", disabled=True),
+            }
+            df_editado = st.data_editor(
+                df_tabela_show,
+                use_container_width=True,
+                hide_index=True,
+                disabled=cols_bloqueadas,
+                column_config=config_editor_df,
+                key="editor_lote_chamados"
+            )
+            if st.button("💾 Salvar Edições da Tabela em Lote", type="primary", key="btn_salvar_lote_tabela"):
+                alteracoes_lote: List[Dict[str, Any]] = []
+                for idx_row in range(len(df_tabela_show)):
+                    orig_r = df_tabela_show.iloc[idx_row]
+                    edit_r = df_editado.iloc[idx_row]
+                    st_orig = str(orig_r.get("Status", ""))
+                    st_novo = str(edit_r.get("Status", ""))
+                    ped_orig = str(orig_r.get("Nº Pedido Estoque", "") or "").strip()
+                    ped_novo = str(edit_r.get("Nº Pedido Estoque", "") or "").strip()
+                    if st_orig != st_novo or ped_orig != ped_novo:
+                        st_final = st_novo
+                        if ped_novo and not ped_orig and st_novo == OPCOES_STATUS[0]:
+                            st_final = OPCOES_STATUS[1]
+                        alteracoes_lote.append({
+                            "id": int(orig_r["ID"]),
+                            "status": st_final,
+                            "numero_pedido": ped_novo
+                        })
+                if not alteracoes_lote:
+                    st.warning("⚠️ Nenhuma linha foi modificada na tabela.")
+                else:
+                    with st.spinner(f"Salvando {len(alteracoes_lote)} chamado(s) em lote..."):
+                        ok_lote, msg_lote = conexao_bd.atualizar_requisicoes_em_lote(alteracoes_lote)
+                    if ok_lote:
+                        st.success(msg_lote)
+                        time.sleep(0.5)
+                        st.rerun()
+                    else:
+                        st.error(msg_lote)
+        else:
+            config_colunas_df = {
+                "ID": st.column_config.NumberColumn("ID", width="small", format="%d"),
+                "Chamado / Ticket": st.column_config.TextColumn("Chamado", width="small"),
+                "Nº Pedido Estoque": st.column_config.TextColumn("Pedido Estoque", width="small"),
+                "Status": st.column_config.TextColumn("Status", width="medium"),
+                "Previsão de Retorno": st.column_config.TextColumn("Previsão SLA", width="small"),
+                "Data Solicitação": st.column_config.TextColumn("Solicitação", width="small"),
+                "Unidade de Saúde": st.column_config.TextColumn("Unidade de Saúde", width="medium"),
+                "Setor / Departamento": st.column_config.TextColumn("Setor", width="medium"),
+                "Material / Equipamento": st.column_config.TextColumn("Material / Peça", width="medium"),
+                "Qtd": st.column_config.NumberColumn("Qtd", width="small", format="%d"),
+                "Técnico Responsável": st.column_config.TextColumn("Técnico", width="medium"),
+                "Porte": st.column_config.TextColumn("Porte", width="small"),
+                "Empresa / Lote": st.column_config.TextColumn("Empresa / Lote", width="small"),
+                "Zona / Região": st.column_config.TextColumn("Zona", width="small"),
+            }
+
+            st.dataframe(
+                df_tabela_show,
+                use_container_width=True,
+                hide_index=True,
+                column_config=config_colunas_df
+            )
 
         # Atualização Rápida de Status, Pedido no Estoque & Prazo SLA em Container Neon
         st.write("")
@@ -1730,33 +2215,6 @@ def render_aba_consulta() -> None:
                 """,
                 unsafe_allow_html=True
             )
-
-            base_chamados = df_filtrado if not df_filtrado.empty else df
-            opcoes_chamados = {}
-            for _, row in base_chamados.iterrows():
-                rid = row['id']
-                chamado_num = str(row.get('numero_chamado') or row.get('ticket') or '').strip()
-                unidade = str(row.get('unidade_nome') or row.get('unidade') or '').strip()
-                setor = str(row.get('setor_nome') or row.get('setor') or '').strip()
-                material = str(row.get('equipamento_nome') or row.get('item_solicitado') or 'Material').strip()
-                tecnico = str(row.get('tecnico_nome') or row.get('tecnico_responsavel') or '').strip()
-
-                partes = [f"Protocolo #{rid}"]
-                if chamado_num:
-                    partes.append(f"Chamado: {chamado_num}")
-                if unidade:
-                    partes.append(f"UBS: {unidade}")
-                if setor:
-                    partes.append(f"({setor})")
-                partes.append(f"• {material}")
-                if tecnico:
-                    partes.append(f"[{tecnico}]")
-
-                label = " | ".join(partes)
-                opcoes_chamados[label] = rid
-
-            if not opcoes_chamados:
-                opcoes_chamados = {f"Protocolo #{row['id']}": row['id'] for _, row in df.iterrows()}
 
             chamado_selecionado = st.selectbox(
                 "Selecione a Requisição / Ordem de Serviço para Atualizar:",
@@ -1796,8 +2254,6 @@ def render_aba_consulta() -> None:
             except Exception:
                 data_prev_val = date.today() + timedelta(days=2)
 
-            is_adm_user = st.session_state.get("is_admin", False)
-
             # Card de Resumo Rápido da O.S. Selecionada
             st.markdown(
                 f"""
@@ -1805,7 +2261,7 @@ def render_aba_consulta() -> None:
                     <span>🎫 <strong>Chamado:</strong> <code style="color: #38bdf8; background: #0f172a; padding: 2px 6px; border-radius: 4px;">{chamado_alvo_dict.get('numero_chamado') or 'Sem Ticket'}</code></span>
                     <span>🏥 <strong>Unidade:</strong> <strong style="color: #f1f5f9;">{chamado_alvo_dict.get('unidade_nome') or 'Não informada'}</strong></span>
                     <span>🏷️ <strong>Setor:</strong> <strong style="color: #f1f5f9;">{chamado_alvo_dict.get('setor_nome') or 'Geral'}</strong></span>
-                    <span>💻 <strong>Material:</strong> <strong style="color: #f1f5f9;">{chamado_alvo_dict.get('equipamento_nome') or 'Peça de TI'}</strong></span>
+                    <span>💻 <strong>Material:</strong> <strong style="color: #f1f5f9;">{chamado_alvo_dict.get('quantidade', 1)}x {chamado_alvo_dict.get('equipamento_nome') or 'Peça de TI'}</strong></span>
                     <span>👨‍💻 <strong>Técnico:</strong> <strong style="color: #f1f5f9;">{chamado_alvo_dict.get('tecnico_nome') or 'Técnico Responsável'}</strong></span>
                 </div>
                 """,
@@ -1859,6 +2315,13 @@ def render_aba_consulta() -> None:
                     )
                     nova_data_prevista = data_prev_val
 
+            baixa_auto_estoque = st.checkbox(
+                f"📦 Registrar baixa automática de {chamado_alvo_dict.get('quantidade', 1)}x '{chamado_alvo_dict.get('equipamento_nome') or 'Material'}' no Almoxarifado para '{chamado_alvo_dict.get('unidade_nome') or 'Unidade'}'",
+                value=False,
+                key=f"chk_baixa_auto_{id_alvo}",
+                help="Se marcado, desconta automaticamente a peça do saldo físico do Estoque e registra a saída para esta Unidade de Saúde vinculada à O.S."
+            )
+
             with col_up_btn:
                 st.write("")
                 st.write("")
@@ -1877,9 +2340,16 @@ def render_aba_consulta() -> None:
                             nova_data_prevista=dt_salvar_str
                         )
                         if ok_st:
-                            conexao_bd.limpar_cache_dados()
-                            st.success(msg_st)
-                            time.sleep(0.5)
+                            if baixa_auto_estoque:
+                                resp_baixa = st.session_state.get("usuario_email") or "Sistema"
+                                ok_bx, msg_bx = conexao_bd.dar_baixa_estoque_por_chamado(chamado_alvo_dict, responsavel=resp_baixa)
+                                if ok_bx:
+                                    st.success(f"{msg_st} | 📦 {msg_bx}")
+                                else:
+                                    st.warning(f"{msg_st} | ⚠️ Estoque: {msg_bx}")
+                            else:
+                                st.success(msg_st)
+                            time.sleep(0.6)
                             st.rerun()
                         else:
                             st.error(msg_st)
@@ -2103,11 +2573,14 @@ def render_aba_admin() -> None:
             else:
                 st.warning("⚠️ Informe o nome da unidade.")
 
+        st.divider()
+        preventivas_view.render_painel_gestao_ubs_enderecos_rotas(key_suffix="admin_unidades")
+        st.divider()
         itens_unidades, _ = conexao_bd.buscar_itens_tabela("unidades")
         if itens_unidades:
             df_u = pd.DataFrame(itens_unidades)
-            st.markdown("##### Unidades Cadastradas")
-            colunas_u_show = [c for c in ["id", "unidade", "porte", "empresa", "nome_responsavel", "cargo_responsavel"] if c in df_u.columns]
+            st.markdown("##### Unidades Cadastradas no Banco Relacional (Supabase)")
+            colunas_u_show = [c for c in ["id", "unidade", "porte", "empresa", "distrito", "bairro", "endereco", "cep", "bloco_preventiva", "ordem_rota", "nome_responsavel", "cargo_responsavel"] if c in df_u.columns]
             st.dataframe(df_u[colunas_u_show] if colunas_u_show else df_u, use_container_width=True, hide_index=True)
 
             st.divider()
@@ -2441,7 +2914,7 @@ def main() -> None:
     st.title(f"{APP_ICON} {APP_TITLE}")
     # Define quais abas estão disponíveis para o usuário com base no perfil de acesso
     is_admin = bool(st.session_state.get("is_admin", False))
-    abas_permitidas = ABAS_SISTEMA if is_admin else [aba for aba in ABAS_SISTEMA if "Admin" not in aba]
+    abas_permitidas = ABAS_SISTEMA if is_admin else [aba for aba in ABAS_SISTEMA if "Admin" not in aba and "Estoque" not in aba]
 
     aba_selecionada_atual = st.session_state.get("aba_selecionada", abas_permitidas[0])
     if aba_selecionada_atual not in abas_permitidas:
@@ -2481,12 +2954,15 @@ def main() -> None:
     elif aba_atual == ABAS_SISTEMA[2]:
         render_aba_consulta()
     elif aba_atual == ABAS_SISTEMA[3]:
+        importlib.reload(preventivas_view)
+        preventivas_view.render_aba_preventivas()
+    elif aba_atual == ABAS_SISTEMA[4] and is_admin:
         usr_info = st.session_state.get("usuario_logado")
         if not isinstance(usr_info, dict):
             usr_info = {"email": st.session_state.get("usuario_email")}
         importlib.reload(estoque_view)
         estoque_view.render_aba_estoque(usuario_logado=usr_info, is_admin=is_admin)
-    elif aba_atual == ABAS_SISTEMA[4] and is_admin:
+    elif aba_atual == ABAS_SISTEMA[5] and is_admin:
         render_aba_admin()
 
 
